@@ -1,0 +1,24 @@
+# Bartosz Załęski — Strony internetowe dla firm i marek
+
+> Freelancer projektujący i wdrażający nowoczesne, szybkie strony internetowe dla firm, marek osobistych i małych biznesów. Prowadzi klienta od pomysłu i struktury, przez design, aż po wdrożenie, podstawowe SEO i wsparcie po publikacji.
+
+## Czym się zajmuję
+- Projektowanie i kodowanie stron internetowych (Next.js, React, TypeScript)
+- Responsywne, szybkie strony zoptymalizowane pod urządzenia mobilne
+- Podstawowe SEO i optymalizacja wydajności (Core Web Vitals)
+- Wdrożenie online, pomoc z domeną i hostingiem
+- Wsparcie, poprawki i rozwój strony po publikacji
+
+## Usługi
+- Strony internetowe dla firm — wizerunkowe i ofertowe strony, które budują zaufanie i prowadzą do kontaktu.
+- Landing page — jednostronicowe strony pod konkretny cel (kampania, usługa, zapisy).
+- Strony z prostą edycją treści — z CMS lub panelem do samodzielnej edycji.
+- Rozbudowane strony z funkcjami — formularze, integracje, rezerwacje, bazy danych.
+- Opieka i rozwój — poprawki, aktualizacje, nowe sekcje i optymalizacja po wdrożeniu.
+
+## Dla kogo
+Firmy, marki osobiste, usługodawcy i małe biznesy, które potrzebują profesjonalnej strony budującej zaufanie i pozyskującej klientów — bez technicznego chaosu.
+
+## Kontakt
+- Strona: https://bartoszzaleski.com
+- Formularz kontaktowy na stronie (sekcja „Kontakt").

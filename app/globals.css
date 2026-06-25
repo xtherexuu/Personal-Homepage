@@ -1,26 +1,72 @@
 @import "tailwindcss";
 
+/*
+  Bartosz Załęski — design tokens · "Aurora Night" (ProjectVision palette 5).
+  Dark, cinematic base for the night-lake hero. Green = identity/accents,
+  amber = the single call-to-action, near-white = the message, sage = support.
+*/
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --bg: #0b1a1c; /* base background — hero mask color */
+  --surface: #102a28; /* raised surface / section break */
+
+  --mint: #3ddc97; /* primary green accent */
+  --mint-strong: #2fb985; /* green hover / pressed */
+  --amber: #e8923a; /* warm contrast — primary CTA */
+  --amber-strong: #d77f29; /* amber hover / pressed */
+
+  --paper: #e8f2ee; /* near-white — headings, name outline */
+  --muted: #8fa9a2; /* muted greenish — body / secondary text */
+  --line: rgba(143, 169, 162, 0.18); /* hairlines, pill borders */
+
+  --background: var(--bg);
+  --foreground: var(--paper);
 }
 
 @theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-mint: var(--mint);
+  --color-mint-strong: var(--mint-strong);
+  --color-amber: var(--amber);
+  --color-amber-strong: var(--amber-strong);
+  --color-paper: var(--paper);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --font-display: var(--font-bricolage), "Arial Black", sans-serif;
+  --font-sans: var(--font-hanken), system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--bg);
+  color: var(--paper);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/*
+  Name treatment: a clean outline around the glyph SILHOUETTE via the
+  #name-outline feMorphology filter (defined in hero-content.tsx), with a
+  transparent interior so the animated hero shows THROUGH the letters. Unlike
+  -webkit-text-stroke, this doesn't trace each glyph contour, so close letters
+  (A/T...) don't produce overlapping seams. The opaque color only feeds the
+  filter's SourceAlpha; the filter floods the actual outline color.
+*/
+.text-outline {
+  color: #e8f2ee; /* opaque, only feeds the filter's SourceAlpha */
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
 }
