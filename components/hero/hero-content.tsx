@@ -1,6 +1,3 @@
-"use client";
-
-import { motion, useReducedMotion } from "framer-motion";
 import { ArrowRight, ArrowUpRight } from "lucide-react";
 import type { CSSProperties } from "react";
 
@@ -12,43 +9,42 @@ const BADGES = [
   "Wsparcie po publikacji",
 ];
 
-// soft "expo out" — decisive then gently settles
-const EASE = [0.16, 1, 0.3, 1] as const;
-
 /**
  * HeroContent — text layer over the WebGL hero.
  *
- * Entrance: one orchestrated, restrained cascade (framer-motion) timed with the
- * WebGL spotlight forming behind it. Supporting copy fades up with a soft
- * blur-in; the name only translates + fades (it carries the #name-outline SVG
- * filter, and animating `filter` would wipe the outline). Reduced-motion → no
- * animation, content visible immediately.
+ * A React Server Component (no client JS): the orchestrated entrance is pure CSS
+ * (`.hero-rise` / `.hero-rise-blur` + @keyframes in globals.css), so it paints and
+ * animates on the first frame with no hydration wait, and the copy is visible even
+ * if JS never runs. Each element sets its own --rise-y (travel) and --rise-delay
+ * (stagger). The name animates transform + opacity only, so its #name-outline SVG
+ * filter survives; supporting copy gets a soft blur-in. prefers-reduced-motion
+ * collapses the whole cascade to an instant, composed frame (globals.css).
  *
- * Sizing/pointer-events/SEO structure unchanged — see notes below.
+ * Rendered server-side and passed into the client <Hero> as children, so neither
+ * this markup nor the lucide icons ship in the client bundle. It's pointer-events
+ * -none so the WebGL mask still tracks through the copy; only the CTAs opt back in.
  */
+
+// per-element travel + stagger → CSS custom props consumed by .hero-rise(-blur)
+const rise = (delay: number, y: number): CSSProperties =>
+  ({ "--rise-y": `${y}px`, "--rise-delay": `${delay}s` }) as CSSProperties;
+
 export function HeroContent() {
-  const reduce = useReducedMotion();
-
-  // translate + fade (safe for the filtered name)
-  const rise = (delay: number, y = 26) =>
-    reduce
-      ? {}
-      : {
-          initial: { opacity: 0, y },
-          animate: { opacity: 1, y: 0 },
-          transition: { duration: 0.9, ease: EASE, delay },
-        };
-  // translate + fade + soft blur-in (for non-filtered text)
-  const riseBlur = (delay: number, y = 20) =>
-    reduce
-      ? {}
-      : {
-          initial: { opacity: 0, y, filter: "blur(8px)" },
-          animate: { opacity: 1, y: 0, filter: "blur(0px)" },
-          transition: { duration: 0.85, ease: EASE, delay },
-        };
-
   const unit = { "--u": "clamp(10px, min(2.7vh, 3vw), 42px)" } as CSSProperties;
+
+  // CTA sizing tracks --u so the buttons keep their visual weight on tall / large
+  // screens (≈1440p+) instead of shrinking against the --u-scaled copy around them.
+  // The clamp FLOORS reproduce today's phone / 1080p size (24px px-pad, 14px py-pad,
+  // ~1.05rem text, 16px icons); the --u middle term only overtakes those floors once
+  // --u grows past ~29px (i.e. taller viewports — the axis the rest of the hero scales
+  // on), and the ceilings cap the growth on very large displays. The max-height guard
+  // still trims the vertical padding on short landscape screens.
+  const ctaSize =
+    "px-[clamp(1.5rem,calc(var(--u)*0.82),2.1rem)] " +
+    "py-[clamp(0.875rem,calc(var(--u)*0.48),1.25rem)] " +
+    "text-[clamp(0.95rem,calc(var(--u)*0.58),1.45rem)] " +
+    "[@media(max-height:600px)]:py-2.5";
+  const ctaIcon = "size-[clamp(1rem,calc(var(--u)*0.55),1.4rem)]";
 
   return (
     <div className="pointer-events-none absolute inset-0 z-10 flex items-center">
@@ -89,88 +85,103 @@ export function HeroContent() {
         className="flex w-full flex-col items-start px-6 sm:px-10 lg:px-20 2xl:pl-32"
       >
         {/* eyebrow */}
-        <motion.p
-          {...riseBlur(0.05, 12)}
-          className="inline-flex items-center gap-2.5 font-mono uppercase tracking-[0.28em] text-muted text-[clamp(0.62rem,1.3vw,0.8rem)] mb-[calc(var(--u)*0.9)]"
+        <p
+          style={rise(0.05, 12)}
+          className="hero-rise-blur pointer-events-auto inline-flex max-w-full flex-wrap items-center gap-x-[0.45em] gap-y-1 font-mono uppercase tracking-[0.28em] text-muted text-[clamp(0.62rem,1.3vw,0.8rem)] mb-[calc(var(--u)*0.9)]"
         >
-          <span className="relative flex h-1.5 w-1.5" aria-hidden>
-            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-mint opacity-60" />
-            <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-mint" />
+          {/* Two atomic groups so the eyebrow never breaks into a lone trailing
+              word: when it can't fit on one line it always splits as
+              "Strony internetowe dla" / "firm i marek" — regardless of where the
+              hamburger sits. The dot stays bound to the first group. */}
+          <span className="inline-flex shrink-0 items-center gap-2.5 whitespace-nowrap">
+            <span className="relative flex h-1.5 w-1.5 shrink-0" aria-hidden>
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-mint opacity-60" />
+              <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-mint" />
+            </span>
+            Strony internetowe dla
           </span>
-          Strony internetowe dla firm i marek
-        </motion.p>
+          <span className="whitespace-nowrap">firm i marek</span>
+        </p>
 
         {/* name — the two lines rise in sequence */}
-        <h1 className="font-display font-extrabold uppercase leading-[0.84] tracking-[-0.02em] text-[calc(var(--u)*4)]">
-          <motion.span
-            {...rise(0.16, 36)}
-            className="block text-outline [filter:url(#name-outline-sm)] sm:[filter:url(#name-outline)]"
+        <h1 className="pointer-events-auto font-display font-extrabold uppercase leading-[0.84] tracking-[-0.02em] text-[calc(var(--u)*4)]">
+          <span
+            style={rise(0.16, 36)}
+            data-text="Bartosz"
+            className="hero-rise block text-outline"
           >
             Bartosz
-          </motion.span>
-          <motion.span
-            {...rise(0.28, 36)}
-            className="block text-mint drop-shadow-[0_0_34px_rgba(61,220,151,0.28)]"
+          </span>
+          <span
+            style={rise(0.28, 36)}
+            className="hero-rise block text-mint drop-shadow-[0_0_34px_rgba(61,220,151,0.28)]"
           >
             Załęski
-          </motion.span>
+          </span>
         </h1>
 
-        {/* value statement */}
-        <motion.h2
-          {...riseBlur(0.48, 24)}
-          className="font-display font-semibold leading-[1.12] text-paper text-balance text-[calc(var(--u)*1.5)] mt-[calc(var(--u)*0.72)] max-w-[min(34rem,90vw)]"
+        {/* value statement — on mobile, text-balance keeps the short measure tidy.
+            From lg up we switch to a greedy text-pretty fill inside a wider column:
+            the name „BARTOSZ" runs ~18×--u wide, so a ~20×--u measure lets the long
+            lines spill just past the name's right edge (the look the design calls
+            for) rather than wrapping shy of it. Because --u itself is capped at 42px,
+            the column is naturally bounded; the 34rem floor covers short-height lg
+            screens where --u is height-driven small. The expansion <p> below shares
+            this measure so the justified body lines up to the same right boundary. */}
+        <h2
+          style={rise(0.48, 24)}
+          className="hero-rise-blur pointer-events-auto font-display font-semibold leading-[1.12] text-paper text-balance lg:text-pretty text-[calc(var(--u)*1.5)] mt-[calc(var(--u)*0.72)] max-w-[min(34rem,90vw)] lg:max-w-[max(34rem,calc(var(--u)*20))]"
         >
           Tworzę strony internetowe, które wyglądają tak dobrze, że od pierwszej
           sekundy <span className="text-mint">podnoszą wartość Twojej marki</span>.
-        </motion.h2>
+        </h2>
 
         {/* expansion */}
-        <motion.p
-          {...riseBlur(0.62, 18)}
-          className="leading-relaxed text-muted text-[clamp(0.95rem,1.25vw,1.12rem)] mt-[clamp(0.8rem,calc(var(--u)*0.5),1.5rem)] max-w-[34rem] [@media(max-height:560px)]:hidden"
+        <p
+          style={rise(0.62, 18)}
+          className="hero-rise-blur pointer-events-auto leading-relaxed text-muted text-[clamp(0.95rem,1.25vw,1.12rem)] mt-[clamp(0.8rem,calc(var(--u)*0.5),1.5rem)] max-w-[34rem] lg:max-w-[max(34rem,calc(var(--u)*20))] sm:hyphens-auto sm:text-justify [@media(max-height:560px)]:hidden"
         >
           Łączę dopracowany design, błyskawiczne działanie i przemyślaną
           strukturę — tak, żeby Twoja strona nie była tylko ładna, ale realnie
           budowała zaufanie i zdobywała klientów.
-        </motion.p>
+        </p>
 
         {/* feature badges — each pill staggers in */}
         <ul
-          className="flex flex-wrap gap-2 mt-[clamp(1rem,calc(var(--u)*0.7),1.85rem)] [@media(max-height:520px)]:hidden"
+          className="flex flex-wrap gap-2 mt-[clamp(1rem,calc(var(--u)*0.7),1.85rem)] select-none [@media(max-height:520px)]:hidden"
           aria-label="Zakres usług"
         >
           {BADGES.map((b, i) => (
-            <motion.li
+            <li
               key={b}
-              {...rise(0.74 + i * 0.05, 10)}
-              className="rounded-full border border-line bg-surface/40 px-3 py-1.5 font-mono uppercase tracking-wide text-muted backdrop-blur-sm text-[clamp(0.6rem,1vw,0.72rem)]"
+              style={rise(0.74 + i * 0.05, 10)}
+              className="hero-rise rounded-full border border-line bg-surface/40 px-3 py-1.5 font-mono uppercase tracking-wide text-muted backdrop-blur-sm text-[clamp(0.6rem,1vw,0.72rem)]"
             >
               {b}
-            </motion.li>
+            </li>
           ))}
         </ul>
 
         {/* CTA — amber primary + bordered secondary */}
-        <motion.div
-          {...rise(0.86, 16)}
-          className="pointer-events-auto flex flex-col gap-3 sm:flex-row sm:items-center mt-[clamp(1.1rem,calc(var(--u)*0.85),2.1rem)]"
+        <div
+          style={rise(0.86, 16)}
+          className="hero-rise pointer-events-auto flex flex-col gap-3 select-none sm:flex-row sm:items-center mt-[clamp(1.1rem,calc(var(--u)*0.85),2.1rem)]"
         >
           <a
             href="#kontakt"
-            className="group inline-flex items-center justify-center gap-2 rounded-full bg-amber px-6 py-3.5 font-semibold text-bg shadow-[0_10px_34px_-8px_rgba(232,146,58,0.55)] transition duration-200 hover:-translate-y-0.5 hover:bg-amber-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber focus-visible:ring-offset-2 focus-visible:ring-offset-bg text-[clamp(0.95rem,1vw,1.05rem)] [@media(max-height:600px)]:py-2.5"
+            className={`group inline-flex items-center justify-center gap-2 rounded-full bg-amber font-semibold text-bg shadow-[0_10px_34px_-8px_rgba(232,146,58,0.55)] transition duration-200 hover:-translate-y-0.5 hover:bg-amber-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber focus-visible:ring-offset-2 focus-visible:ring-offset-bg ${ctaSize}`}
           >
             Porozmawiajmy o stronie
-            <ArrowRight className="size-4 transition-transform duration-200 group-hover:translate-x-0.5" />
+            <ArrowRight className={`${ctaIcon} transition-transform duration-200 group-hover:translate-x-0.5`} />
           </a>
           <a
             href="#portfolio"
-            className="group inline-flex items-center justify-center gap-1.5 rounded-full border border-paper/30 px-6 py-3.5 font-semibold text-paper transition duration-200 hover:-translate-y-0.5 hover:border-paper/60 hover:bg-paper/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-paper/40 focus-visible:ring-offset-2 focus-visible:ring-offset-bg text-[clamp(0.95rem,1vw,1.05rem)] [@media(max-height:600px)]:py-2.5"
+            className={`group inline-flex items-center justify-center gap-1.5 rounded-full border border-paper/30 font-semibold text-paper transition duration-200 hover:-translate-y-0.5 hover:border-paper/60 hover:bg-paper/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-paper/40 focus-visible:ring-offset-2 focus-visible:ring-offset-bg ${ctaSize}`}
           >
             Zobacz projekty
-            <ArrowUpRight className="size-4 transition-transform duration-200 group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
+            <ArrowUpRight className={`${ctaIcon} transition-transform duration-200 group-hover:translate-x-0.5 group-hover:-translate-y-0.5`} />
           </a>
-        </motion.div>
+        </div>
       </div>
     </div>
   );
