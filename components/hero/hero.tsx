@@ -1,10 +1,10 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 
+import { usePanelActive } from "@/components/sections/section-context";
 import heroBg from "@/public/hero-bg.jpg";
-import { HeroContent } from "@/components/hero/hero-content";
 
 /**
  * Hero — cursor-reactive organic "NoiseMask" reveal over a static image, ported
@@ -164,25 +164,47 @@ void main(){
   frag = vec4(col, 1.0);
 }`;
 
-function compile(gl: WebGL2RenderingContext, type: number, src: string) {
-  const sh = gl.createShader(type)!;
-  gl.shaderSource(sh, src);
-  gl.compileShader(sh);
-  if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) {
-    const log = gl.getShaderInfoLog(sh);
-    gl.deleteShader(sh);
-    throw new Error("shader compile: " + log);
-  }
-  return sh;
-}
-
 const clamp = (v: number, lo: number, hi: number) =>
   Math.max(lo, Math.min(hi, v));
 const easeOutExpo = (t: number) => (t >= 1 ? 1 : 1 - Math.pow(2, -10 * t));
 
-export function Hero() {
+export function Hero({ children }: { children?: ReactNode }) {
   const rootRef = useRef<HTMLElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const isActive = usePanelActive();
+  const activeRef = useRef(true);
+  const prevActiveRef = useRef(true);
+  const loopCtrl = useRef<((on: boolean) => void) | null>(null);
+
+  // Pause the WebGL loop whenever this panel isn't the active section. The
+  // full-screen fragment shader is far too heavy to keep running behind a
+  // crossfaded-out panel — left running it saturates the compositor/GPU and
+  // starves every other animation (and the rest of the deck) of frames. On
+  // RE-activation we also hold it paused until the crossfade finishes, so the
+  // shader doesn't fight the panel's opacity/transform transition for the GPU
+  // (which would stall the crossfade). On first mount there's no crossfade, so
+  // it starts right away.
+  useEffect(() => {
+    const wasActive = prevActiveRef.current;
+    prevActiveRef.current = isActive;
+
+    if (!isActive) {
+      activeRef.current = false;
+      loopCtrl.current?.(false);
+      return;
+    }
+    if (wasActive) {
+      activeRef.current = true;
+      loopCtrl.current?.(true);
+      return;
+    }
+    activeRef.current = false; // stay paused through the crossfade
+    const t = setTimeout(() => {
+      activeRef.current = true;
+      loopCtrl.current?.(true);
+    }, 850);
+    return () => clearTimeout(t);
+  }, [isActive]);
 
   useEffect(() => {
     const root = rootRef.current;
@@ -203,44 +225,30 @@ export function Hero() {
       return;
     }
 
-    let program: WebGLProgram;
-    try {
-      const vs = compile(gl, gl.VERTEX_SHADER, VERT);
-      const fs = compile(gl, gl.FRAGMENT_SHADER, FRAG);
-      program = gl.createProgram()!;
-      gl.attachShader(program, vs);
-      gl.attachShader(program, fs);
-      gl.linkProgram(program);
-      if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
-        throw new Error(gl.getProgramInfoLog(program) || "link failed");
-      }
-      gl.deleteShader(vs);
-      gl.deleteShader(fs);
-    } catch (e) {
-      console.error("[hero] WebGL init failed:", e);
-      canvas.style.display = "none";
-      return;
-    }
-    gl.useProgram(program);
-
-    const vao = gl.createVertexArray();
-    gl.bindVertexArray(vao);
-
-    const loc = (n: string) => gl.getUniformLocation(program, n);
-    const u = {
-      res: loc("uRes"), time: loc("uTime"), mouse: loc("uMouse"),
-      radius: loc("uRadius"), intro: loc("uIntro"), turb: loc("uTurb"),
-      levels: loc("uLevels"), speed: loc("uSpeed"), vel: loc("uVel"),
-      grain: loc("uGrain"), dark: loc("uDark"), tex: loc("uTex"),
-      texRes: loc("uTexRes"),
+    // Compile + link WITHOUT a synchronous status read. gl.getProgramParameter(
+    // LINK_STATUS) forces the driver to FINISH compiling on the spot, freezing the
+    // main thread (300ms–>1s on mobile GPUs for this shader) and blocking hydration
+    // and paint. Instead we kick off the compile and poll KHR_parallel_shader_compile
+    // off the main thread, wiring everything up only once the program is ready — same
+    // program, same pixels, only WHEN the first frame appears changes. Where the
+    // extension is absent (some iOS Safari) we fall back to today's behaviour.
+    const parallel = gl.getExtension("KHR_parallel_shader_compile");
+    const mkShader = (type: number, src: string) => {
+      const sh = gl.createShader(type)!;
+      gl.shaderSource(sh, src);
+      gl.compileShader(sh); // status read deferred until after link completes
+      return sh;
     };
-    gl.uniform3fv(u.dark, DARK);
-    gl.uniform1i(u.tex, 0);
-    gl.uniform1f(u.turb, TURBULENCE);
-    gl.uniform1f(u.levels, LEVELS);
-    gl.uniform1f(u.speed, SPEED);
+    let vs: WebGLShader | null = mkShader(gl.VERTEX_SHADER, VERT);
+    let fs: WebGLShader | null = mkShader(gl.FRAGMENT_SHADER, FRAG);
+    const program = gl.createProgram()!;
+    gl.attachShader(program, vs);
+    gl.attachShader(program, fs);
+    gl.linkProgram(program);
 
-    // texture (1px placeholder until the image decodes)
+    // texture object + 1px dark placeholder, created up front so the image can
+    // start downloading NOW — in parallel with the shader compile above — and
+    // upload whenever it's ready; the placeholder keeps the first frame correct.
     const texture = gl.createTexture();
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, texture);
@@ -252,22 +260,62 @@ export function Hero() {
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
 
     const st = {
-      w: 0, h: 0, dpr: 1,
+      w: 0, h: 0, dpr: 1, rscale: 1,
       mx: 0, my: 0, tx: 0, ty: 0,
       hasPointer: false, texW: 1, texH: 1,
-      start: 0, last: 0, raf: 0, running: false, disposed: false,
+      start: 0, last: 0, raf: 0, pollRaf: 0, running: false, disposed: false,
       prevTx: 0, prevTy: 0, boost: 0, sTime: 0, velX: 0, velY: 0,
+      emaDt: 0, perfFrames: 0, scaled: false,
     };
+
+    // Uniform locations + VAO are filled once the program links (finishInit below);
+    // observers are created there too so nothing can fire before the program exists.
+    let u: { [k: string]: WebGLUniformLocation | null } | null = null;
+    let vao: WebGLVertexArrayObject | null = null;
+    let ro: ResizeObserver | null = null;
+    let io: IntersectionObserver | null = null;
+
+    // Feed the WebGL texture from Next's image optimizer (AVIF/WebP, right-sized)
+    // instead of the raw 347 KB JPG; fall back to the raw asset on error. The
+    // width MIRRORS the variant the <Image> srcset picks for sizes="100vw"
+    // (smallest deviceSize ≥ viewport CSS width × the REAL, uncapped dpr) and
+    // shares q=75 — so the browser serves this from the <Image>'s cache entry:
+    // one hero download for both, and a phone never pulls the full 1920px frame.
+    const DEVICE_SIZES = [640, 750, 828, 1080, 1200, 1920];
+    const cssW = document.documentElement.clientWidth || window.innerWidth;
+    const need = Math.ceil(cssW * (window.devicePixelRatio || 1));
+    const texW = DEVICE_SIZES.find((s) => s >= need) ?? 1920;
+
+    const img = new window.Image();
+    img.decoding = "async";
+    img.onerror = () => {
+      if (img.src.includes("/_next/image") && !st.disposed) img.src = heroBg.src;
+    };
+    img.onload = () => {
+      if (st.disposed) return;
+      st.texW = img.naturalWidth || 1;
+      st.texH = img.naturalHeight || 1;
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, texture);
+      gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, gl.RGB, gl.UNSIGNED_BYTE, img);
+      if (u) gl.uniform2f(u.texRes, st.texW, st.texH); // else resize() sets it
+    };
+    img.src = `/_next/image?url=${encodeURIComponent(heroBg.src)}&w=${texW}&q=75`;
 
     const radiusFor = () => (st.w < 768 ? 0.4 : 0.27); // fraction of width
 
     const resize = () => {
+      if (!u) return;
       const r = root.getBoundingClientRect();
       st.dpr = Math.min(window.devicePixelRatio || 1, 2);
       st.w = r.width;
       st.h = r.height;
-      const bw = Math.max(1, Math.round(r.width * st.dpr));
-      const bh = Math.max(1, Math.round(r.height * st.dpr));
+      // st.rscale (≤1) downscales ONLY the backing store on struggling phones; the
+      // CSS size and st.w/st.h (CSS px) stay full, so the mask geometry, pointer
+      // mapping and aspect ratio are unchanged.
+      const bw = Math.max(1, Math.round(r.width * st.dpr * st.rscale));
+      const bh = Math.max(1, Math.round(r.height * st.dpr * st.rscale));
       if (canvas.width !== bw || canvas.height !== bh) {
         canvas.width = bw;
         canvas.height = bh;
@@ -283,31 +331,27 @@ export function Hero() {
       st.my = st.ty = st.prevTy = st.h / 2;
     };
 
-    // Feed the WebGL texture from Next's image optimizer (AVIF/WebP, resized)
-    // instead of the raw 347 KB JPG; fall back to the raw asset on error.
-    const img = new window.Image();
-    img.decoding = "async";
-    img.onerror = () => {
-      if (img.src.includes("/_next/image") && !st.disposed) img.src = heroBg.src;
-    };
-    img.src = `/_next/image?url=${encodeURIComponent(heroBg.src)}&w=1920&q=75`;
-    img.onload = () => {
-      if (st.disposed) return;
-      st.texW = img.naturalWidth || 1;
-      st.texH = img.naturalHeight || 1;
-      gl.activeTexture(gl.TEXTURE0);
-      gl.bindTexture(gl.TEXTURE_2D, texture);
-      gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
-      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, gl.RGB, gl.UNSIGNED_BYTE, img);
-      gl.uniform2f(u.texRes, st.texW, st.texH);
-    };
-
     const draw = (now: number) => {
-      if (st.disposed) return;
+      if (st.disposed || !u) return;
       if (!st.start) st.start = now;
       const dt = Math.min(now - st.last, 64);
       st.last = now;
       const elapsed = (now - st.start) / 1000;
+
+      // Adaptive resolution: on coarse/touch devices only, if the GPU is clearly
+      // struggling once past warm-up, drop the internal render scale ONCE (never
+      // back up). Fast phones stay full-res so the crisp look is kept where the GPU
+      // can afford it; a struggling phone trades a touch of grain size for a smooth
+      // frame-rate. The single switch lands during the busy intro so it can't pop.
+      if (coarseMQ.matches && !st.scaled && !reduce && elapsed > 0.5) {
+        st.perfFrames++;
+        st.emaDt = st.perfFrames === 1 ? dt : st.emaDt + (dt - st.emaDt) * 0.1;
+        if (st.perfFrames > 45 && st.emaDt > 22) { // sustained < ~45fps
+          st.rscale = 0.71; // ≈ half the fragments
+          st.scaled = true;
+          resize();
+        }
+      }
 
       const introT = Math.min((now - st.start) / INTRO_MS, 1);
       const intro = reduce ? 0 : 1 - easeOutExpo(introT);
@@ -363,7 +407,7 @@ export function Hero() {
     };
 
     const startLoop = () => {
-      if (st.running || st.disposed) return;
+      if (st.running || st.disposed || !activeRef.current) return;
       st.running = true;
       st.last = performance.now();
       st.raf = requestAnimationFrame(draw);
@@ -372,6 +416,9 @@ export function Hero() {
       st.running = false;
       cancelAnimationFrame(st.raf);
     };
+    // Let the panel-active effect above start/stop the loop as the section
+    // enters / leaves view (startLoop's own guard blocks restarts while hidden).
+    loopCtrl.current = (on: boolean) => (on ? startLoop() : stopLoop());
 
     const onMove = (e: PointerEvent) => {
       if (e.pointerType === "touch") return;
@@ -380,32 +427,12 @@ export function Hero() {
       st.tx = st.w / 2 + (e.clientX - r.left - st.w / 2) * TRACK;
       st.ty = st.h / 2 + (e.clientY - r.top - st.h / 2) * TRACK;
     };
-    root.addEventListener("pointermove", onMove, { passive: true });
 
-    const ro = new ResizeObserver(() => {
-      resize();
-      if (!st.hasPointer) initCentre();
-      st.tx = clamp(st.tx, 0, st.w);
-      st.ty = clamp(st.ty, 0, st.h);
-    });
-    ro.observe(root);
-
-    // pause when off-screen / tab hidden (the effect is otherwise perpetual)
-    const io = new IntersectionObserver(
-      ([entry]) => {
-        if (reduce) return;
-        if (entry.isIntersecting && !document.hidden) startLoop();
-        else stopLoop();
-      },
-      { threshold: 0.01 },
-    );
-    io.observe(root);
     const onVis = () => {
       if (reduce) return;
       if (document.hidden) stopLoop();
       else startLoop();
     };
-    document.addEventListener("visibilitychange", onVis);
 
     // A real GL context loss (GPU reset, driver timeout) invalidates every GL
     // object and we don't rebuild them — so hide the now-dead canvas to reveal
@@ -416,29 +443,107 @@ export function Hero() {
       stopLoop();
       canvas.style.display = "none";
     };
-    canvas.addEventListener("webglcontextlost", onContextLost);
 
-    resize();
-    initCentre();
-    if (reduce) {
-      st.start = performance.now();
-      st.last = st.start;
-      draw(st.start); // single static frame, centred
-    } else {
-      startLoop();
-    }
+    // Wire everything up once the shader program has linked (driven by the poll
+    // below). Deferring this — instead of reading LINK_STATUS synchronously — is
+    // what lets the heavy mobile shader compile on a background thread without
+    // freezing hydration; observers/listeners attach here so nothing fires early.
+    const finishInit = () => {
+      if (st.disposed) return;
+      if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+        console.error(
+          "[hero] WebGL link failed:",
+          gl.getProgramInfoLog(program),
+          fs && gl.getShaderInfoLog(fs),
+          vs && gl.getShaderInfoLog(vs),
+        );
+        canvas.style.display = "none"; // graceful fallback: show the <Image>
+        return;
+      }
+      gl.useProgram(program);
+      if (vs) { gl.deleteShader(vs); vs = null; }
+      if (fs) { gl.deleteShader(fs); fs = null; }
+
+      vao = gl.createVertexArray();
+      gl.bindVertexArray(vao);
+
+      const loc = (n: string) => gl.getUniformLocation(program, n);
+      u = {
+        res: loc("uRes"), time: loc("uTime"), mouse: loc("uMouse"),
+        radius: loc("uRadius"), intro: loc("uIntro"), turb: loc("uTurb"),
+        levels: loc("uLevels"), speed: loc("uSpeed"), vel: loc("uVel"),
+        grain: loc("uGrain"), dark: loc("uDark"), tex: loc("uTex"),
+        texRes: loc("uTexRes"),
+      };
+      gl.uniform3fv(u.dark, DARK);
+      gl.uniform1i(u.tex, 0);
+      gl.uniform1f(u.turb, TURBULENCE);
+      gl.uniform1f(u.levels, LEVELS);
+      gl.uniform1f(u.speed, SPEED);
+
+      root.addEventListener("pointermove", onMove, { passive: true });
+      ro = new ResizeObserver(() => {
+        resize();
+        if (!st.hasPointer) initCentre();
+        st.tx = clamp(st.tx, 0, st.w);
+        st.ty = clamp(st.ty, 0, st.h);
+      });
+      ro.observe(root);
+      // pause when off-screen / tab hidden (the effect is otherwise perpetual)
+      io = new IntersectionObserver(
+        ([entry]) => {
+          if (reduce) return;
+          if (entry.isIntersecting && !document.hidden) startLoop();
+          else stopLoop();
+        },
+        { threshold: 0.01 },
+      );
+      io.observe(root);
+      document.addEventListener("visibilitychange", onVis);
+      canvas.addEventListener("webglcontextlost", onContextLost);
+
+      resize();
+      initCentre();
+      if (reduce) {
+        st.start = performance.now();
+        st.last = st.start;
+        draw(st.start); // single static frame, centred
+      } else {
+        startLoop();
+      }
+    };
+
+    // Poll for compile/link completion off the main thread (one rAF apart, so it
+    // overlaps hydration + first paint). Fall back to proceeding immediately when
+    // the extension is missing, and cap the wait so a driver that never reports
+    // completion can't strand the effect.
+    const compileStart = performance.now();
+    const poll = () => {
+      if (st.disposed) return;
+      const ready =
+        !parallel ||
+        gl.getProgramParameter(program, parallel.COMPLETION_STATUS_KHR) === true ||
+        performance.now() - compileStart > 3000;
+      if (ready) finishInit();
+      else st.pollRaf = requestAnimationFrame(poll);
+    };
+    st.pollRaf = requestAnimationFrame(poll);
 
     return () => {
       st.disposed = true;
+      loopCtrl.current = null;
       stopLoop();
+      cancelAnimationFrame(st.pollRaf);
       root.removeEventListener("pointermove", onMove);
       document.removeEventListener("visibilitychange", onVis);
       canvas.removeEventListener("webglcontextlost", onContextLost);
-      ro.disconnect();
-      io.disconnect();
+      ro?.disconnect();
+      io?.disconnect();
       gl.deleteTexture(texture);
       gl.deleteProgram(program);
-      gl.deleteVertexArray(vao);
+      if (vao) gl.deleteVertexArray(vao);
+      if (vs) gl.deleteShader(vs);
+      if (fs) gl.deleteShader(fs);
     };
   }, []);
 
@@ -446,6 +551,7 @@ export function Hero() {
     <section
       ref={rootRef}
       id="hero"
+      data-copy-spaces
       className="relative h-dvh w-full overflow-hidden bg-[#0b1a1c]"
     >
       {/* LCP image + graceful fallback (covered by the canvas when WebGL works). */}
@@ -456,7 +562,7 @@ export function Hero() {
         loading="eager"
         fetchPriority="high"
         sizes="100vw"
-        quality={90}
+        quality={75}
         placeholder="blur"
         className="select-none object-cover"
         draggable={false}
@@ -480,8 +586,8 @@ export function Hero() {
         }}
       />
 
-      {/* Text layer. */}
-      <HeroContent />
+      {/* Text layer (server-rendered, passed in as children — see page.tsx). */}
+      {children}
     </section>
   );
 }

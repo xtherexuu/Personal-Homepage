@@ -1,4 +1,9 @@
 import { Hero } from "@/components/hero/hero";
+import { HeroContent } from "@/components/hero/hero-content";
+import { Panel } from "@/components/sections/panel";
+import { SectionDeck } from "@/components/sections/section-deck";
+import { WhyMe } from "@/components/sections/why-me";
+import { WhyMe2 } from "@/components/sections/why-me-2";
 import { SITE } from "@/lib/site";
 
 const jsonLd = {
@@ -70,7 +75,19 @@ export default function Home() {
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
       <main>
-        <Hero />
+        <SectionDeck>
+          <Panel id="hero">
+            <Hero>
+              <HeroContent />
+            </Hero>
+          </Panel>
+          <Panel id="czemu-ja">
+            <WhyMe />
+          </Panel>
+          <Panel id="czemu-ja-2">
+            <WhyMe2 />
+          </Panel>
+        </SectionDeck>
       </main>
     </>
   );

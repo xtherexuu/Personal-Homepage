@@ -41,6 +41,17 @@
   --font-mono: var(--font-geist-mono), ui-monospace, monospace;
 }
 
+/*
+  The section deck owns vertical gestures (custom scroll), so kill the browser's
+  pull-to-refresh and overscroll bounce — otherwise a downward swipe on a section
+  reloads the page instead of letting the deck navigate back. Pinch-zoom is left
+  intact (overscroll-behavior only affects overscroll, not zoom).
+*/
+html,
+body {
+  overscroll-behavior: none;
+}
+
 body {
   background: var(--bg);
   color: var(--paper);
@@ -49,16 +60,126 @@ body {
   text-rendering: optimizeLegibility;
 }
 
+/* One selection colour everywhere — including outlined (SVG-filtered) display
+   text, so the highlight reads the same over hollow and filled glyphs. */
+::selection {
+  background: var(--mint);
+  color: var(--bg);
+}
+::-moz-selection {
+  background: var(--mint);
+  color: var(--bg);
+}
+
+/* Smooth anchor scrolling for the section nav + hero CTAs (motion-safe only). */
+@media (prefers-reduced-motion: no-preference) {
+  html {
+    scroll-behavior: smooth;
+  }
+}
+
+/* Scroll-down hint: the chevrons bob gently up and down (reduced-motion stills it
+   via the global block below). */
+@keyframes scroll-bob {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(38%);
+  }
+}
+.animate-scroll-bob {
+  animation: scroll-bob 1.5s ease-in-out infinite;
+}
+
 /*
-  Name treatment: a clean outline around the glyph SILHOUETTE via the
-  #name-outline feMorphology filter (defined in hero-content.tsx), with a
-  transparent interior so the animated hero shows THROUGH the letters. Unlike
-  -webkit-text-stroke, this doesn't trace each glyph contour, so close letters
-  (A/T...) don't produce overlapping seams. The opaque color only feeds the
-  filter's SourceAlpha; the filter floods the actual outline color.
+  Outlined display text (hero name `.text-outline`, „żeby były" `.text-outline-zeby`)
+  that still SELECTS and COPIES cleanly. A clean outline comes from the
+  feMorphology filters (defined in hero-content.tsx / why-me.tsx) — unlike
+  -webkit-text-stroke this doesn't seam close letters or flood bold counters.
+
+  The trick: the REAL text is transparent (so it stays selectable + crawlable, the
+  hero shows through the interior, and ::selection paints a normal solid band over
+  it — identical to filled text), while a ::before duplicate (CSS-generated, NOT in
+  the DOM text, so it's never selected/copied) carries the filter. Putting the
+  filter on the pseudo instead of the real text is what keeps the selection
+  highlight off the filter, so outlined and filled glyphs highlight the same. The
+  pseudo's generated text gets an empty a11y alt (where supported) so it isn't read
+  twice; the plain fallback keeps the outline visible in older browsers.
 */
-.text-outline {
-  color: #e8f2ee; /* opaque, only feeds the filter's SourceAlpha */
+.text-outline,
+.text-outline-zeby {
+  position: relative;
+  color: transparent;
+}
+.text-outline::before,
+.text-outline-zeby::before {
+  content: attr(data-text);
+  position: absolute;
+  inset: 0;
+  color: #e8f2ee;
+  pointer-events: none;
+}
+@supports (content: "x" / "y") {
+  .text-outline::before,
+  .text-outline-zeby::before {
+    content: attr(data-text) / "";
+  }
+}
+.text-outline::before {
+  filter: url(#name-outline-sm);
+}
+.text-outline-zeby::before {
+  filter: url(#zeby-line-sm);
+}
+@media (min-width: 640px) {
+  .text-outline::before {
+    filter: url(#name-outline);
+  }
+  .text-outline-zeby::before {
+    filter: url(#zeby-line);
+  }
+}
+
+/*
+  Hero entrance cascade — pure CSS (replaces framer-motion). Each element holds its
+  hidden start state via animation-fill-mode: both, so the copy is present for
+  crawlers and visible even if JS never runs, and the cascade plays on the first
+  painted frame with no hydration wait. Per element, --rise-y sets the travel and
+  --rise-delay the stagger. `.hero-rise` animates transform + opacity ONLY, so the
+  name keeps its #name-outline SVG filter intact; `.hero-rise-blur` adds a blur-in
+  for supporting copy (which carries no SVG filter). prefers-reduced-motion collapses
+  both duration and delay to ~0 (block below) → an instant, fully composed frame.
+*/
+@keyframes hero-rise {
+  from {
+    opacity: 0;
+    transform: translateY(var(--rise-y, 26px));
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes hero-rise-blur {
+  from {
+    opacity: 0;
+    transform: translateY(var(--rise-y, 20px));
+    filter: blur(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+    filter: blur(0);
+  }
+}
+.hero-rise {
+  animation: hero-rise 0.9s cubic-bezier(0.16, 1, 0.3, 1) var(--rise-delay, 0s) both;
+}
+.hero-rise-blur {
+  animation: hero-rise-blur 0.85s cubic-bezier(0.16, 1, 0.3, 1) var(--rise-delay, 0s)
+    both;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -67,6 +188,7 @@ body {
   *::after {
     animation-duration: 0.001ms !important;
     animation-iteration-count: 1 !important;
+    animation-delay: 0s !important; /* no staggered flashing — show composed at once */
     transition-duration: 0.001ms !important;
   }
 }
