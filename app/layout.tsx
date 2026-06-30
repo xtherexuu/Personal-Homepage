@@ -14,12 +14,14 @@ const hanken = Hanken_Grotesk({
   variable: "--font-hanken",
   subsets: ["latin", "latin-ext"],
   display: "swap",
+  preload: false, // body copy, not LCP — don't contend with the hero image at t=0
 });
 
 const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
-  subsets: ["latin"],
+  subsets: ["latin", "latin-ext"], // badges carry ć / ż (Responsywność, Wdrożenie)
   display: "swap",
+  preload: false, // eyebrow + badges, not LCP — defer the preload
 });
 
 export const metadata: Metadata = {
