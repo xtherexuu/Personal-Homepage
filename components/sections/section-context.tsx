@@ -8,6 +8,18 @@ import { createContext, useContext } from "react";
  * nav and the panels consume it. No native scrolling happens — sections are
  * swapped with a crossfade.
  */
+/**
+ * A panel can own INTERNAL steps (e.g. the reveal's three parts). While it's
+ * active it registers a SubNav; the deck then consults it at a scroll boundary:
+ * a little overscroll advances the panel's internal step before the deck steps to
+ * the next panel. `canAdvance(dir)` says whether an internal step exists in that
+ * direction (dir: +1 down / -1 up); `advance(dir)` performs it.
+ */
+export type SubNav = {
+  canAdvance: (dir: number) => boolean;
+  advance: (dir: number) => void;
+};
+
 export type SectionContextValue = {
   active: string; // active PANEL id (a section can span several panels)
   activeSection: string; // nav-section id of the active panel (for the rail/menu)
@@ -15,6 +27,7 @@ export type SectionContextValue = {
   next: () => void; // advance one panel (scroll-hint button); no-op at the end
   menuOpen: boolean;
   setMenuOpen: (open: boolean) => void;
+  registerSubNav: (nav: SubNav | null) => void; // active panel opts into boundary sub-stepping
 };
 
 export const SectionContext = createContext<SectionContextValue | null>(null);

@@ -136,7 +136,7 @@ export function SiteNav() {
       {/* ---------- Desktop rail ---------- */}
       <nav
         aria-label="Sekcje strony"
-        className="fixed right-0 top-1/2 z-40 hidden -translate-y-1/2 select-none flex-col items-end gap-5 pr-5 lg:flex 2xl:gap-6 2xl:pr-8"
+        className="fixed right-0 top-1/2 z-40 hidden -translate-y-1/2 select-none flex-col items-end gap-5 pr-5 lg:flex xl:pr-6 2xl:gap-6 2xl:pr-8 3xl:gap-7 3xl:pr-12"
       >
         {SECTIONS.map((s) => {
           const isActive = activeSection === s.id;
@@ -146,15 +146,15 @@ export function SiteNav() {
               href={`#${s.id}`}
               onClick={go(s.id)}
               aria-current={isActive ? "true" : undefined}
-              className="group flex flex-col items-end gap-1.5 rounded-sm py-0.5 outline-none focus-visible:ring-2 focus-visible:ring-mint/60 focus-visible:ring-offset-4 focus-visible:ring-offset-bg"
+              className="group flex flex-col items-end gap-1.5 rounded-sm py-0.5 outline-none focus-visible:ring-2 focus-visible:ring-mint/60 focus-visible:ring-offset-4 focus-visible:ring-offset-bg 3xl:gap-2"
             >
               <span
                 className={cn(
                   "whitespace-nowrap text-right font-mono uppercase [text-shadow:0_1px_2px_rgba(11,26,28,0.95),0_0_10px_rgba(11,26,28,0.85)] transition-all duration-500",
                   EASE,
                   isActive
-                    ? "text-[0.84rem] tracking-[0.2em] text-mint drop-shadow-[0_0_14px_rgba(61,220,151,0.45)]"
-                    : "text-[0.6rem] tracking-[0.18em] text-muted/65 group-hover:text-muted",
+                    ? "text-[0.84rem] xl:text-[0.92rem] 2xl:text-[1rem] 3xl:text-[1.15rem] tracking-[0.2em] text-mint drop-shadow-[0_0_14px_rgba(61,220,151,0.45)]"
+                    : "text-[0.6rem] xl:text-[0.64rem] 2xl:text-[0.7rem] 3xl:text-[0.78rem] tracking-[0.18em] text-muted/65 group-hover:text-muted",
                 )}
               >
                 {s.label}
@@ -164,8 +164,8 @@ export function SiteNav() {
                   "rounded-full transition-all duration-500",
                   EASE,
                   isActive
-                    ? "h-[3px] w-14 bg-mint shadow-[0_0_16px_-1px_rgba(61,220,151,0.75)]"
-                    : "h-[2px] w-6 bg-muted/40 group-hover:w-9 group-hover:bg-muted/70",
+                    ? "h-[3px] w-14 2xl:w-16 3xl:h-1 3xl:w-20 bg-mint shadow-[0_0_16px_-1px_rgba(61,220,151,0.75)]"
+                    : "h-[2px] w-6 2xl:w-7 3xl:w-8 bg-muted/40 group-hover:w-9 2xl:group-hover:w-10 3xl:group-hover:w-12 group-hover:bg-muted/70",
                 )}
               />
             </a>
@@ -174,7 +174,9 @@ export function SiteNav() {
       </nav>
 
       {/* ---------- Mobile hamburger (top-right) ---------- */}
-      <div className="fixed right-4 top-4 z-[70] lg:hidden">
+      {/* right-5 keeps the button clear of the section's custom scrollbar (the
+          scroll region runs full-width on mobile, so its bar sits at this edge). */}
+      <div className="fixed right-5 top-4 z-[70] lg:hidden">
         <div
           ref={toggleRef}
           role="button"

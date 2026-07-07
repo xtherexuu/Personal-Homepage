@@ -4,6 +4,7 @@ import { Panel } from "@/components/sections/panel";
 import { SectionDeck } from "@/components/sections/section-deck";
 import { WhyMe } from "@/components/sections/why-me";
 import { WhyMe2 } from "@/components/sections/why-me-2";
+import { WhyMeReveal } from "@/components/sections/why-me-reveal";
 import { SITE } from "@/lib/site";
 
 const jsonLd = {
@@ -86,6 +87,9 @@ export default function Home() {
           </Panel>
           <Panel id="czemu-ja-2">
             <WhyMe2 />
+          </Panel>
+          <Panel id="czemu-ja-3">
+            <WhyMeReveal />
           </Panel>
         </SectionDeck>
       </main>

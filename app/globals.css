@@ -36,6 +36,11 @@
   --color-background: var(--background);
   --color-foreground: var(--foreground);
 
+  /* Extra breakpoint above Tailwind's 2xl (1536px): large desktop monitors —
+     QHD at 100–125% scaling (2048–2560 CSS px) and FHD native (1920) land here,
+     so the fixed nav rail can scale up instead of looking tiny on big screens. */
+  --breakpoint-3xl: 120rem; /* 1920px */
+
   --font-display: var(--font-bricolage), "Arial Black", sans-serif;
   --font-sans: var(--font-hanken), system-ui, sans-serif;
   --font-mono: var(--font-geist-mono), ui-monospace, monospace;
@@ -50,6 +55,33 @@
 html,
 body {
   overscroll-behavior: none;
+}
+
+/*
+  Custom scrollbar for the deck's scrollable regions ([data-deck-scroll]) — a
+  thin, rounded, mint-tinted thumb floating over a transparent track. Narrower
+  than the OS default so it reads as modern and stays clear of the mobile menu
+  button in the top-right corner. The 2px transparent border + padding-box clip
+  insets the thumb so the visible bar is slim without losing a grabbable target.
+*/
+[data-deck-scroll] {
+  scrollbar-width: thin; /* Firefox */
+  scrollbar-color: rgba(143, 169, 162, 0.32) transparent; /* thumb · track */
+}
+[data-deck-scroll]::-webkit-scrollbar {
+  width: 10px;
+}
+[data-deck-scroll]::-webkit-scrollbar-track {
+  background: transparent;
+}
+[data-deck-scroll]::-webkit-scrollbar-thumb {
+  border-radius: 9999px;
+  background-color: rgba(143, 169, 162, 0.3);
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+[data-deck-scroll]::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(61, 220, 151, 0.55); /* mint on hover */
 }
 
 body {
@@ -91,6 +123,22 @@ body {
 }
 .animate-scroll-bob {
   animation: scroll-bob 1.5s ease-in-out infinite;
+}
+
+/* WhyMeReveal — each part fades + rises in when it (re)mounts on navigation.
+   prefers-reduced-motion collapses the duration/delay via the global block below. */
+@keyframes why-reveal-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.why-reveal-fade {
+  animation: why-reveal-in 0.55s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 /*
