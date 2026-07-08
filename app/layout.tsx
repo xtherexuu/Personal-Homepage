@@ -1,13 +1,43 @@
 import type { Metadata, Viewport } from "next";
-import { Bricolage_Grotesque, Hanken_Grotesk, Geist_Mono } from "next/font/google";
+import {
+  Anton,
+  Bricolage_Grotesque,
+  Geist,
+  Geist_Mono,
+  Hanken_Grotesk,
+  Playfair_Display,
+} from "next/font/google";
 import "./globals.css";
 
 import { SITE } from "@/lib/site";
+
+const anton = Anton({
+  variable: "--font-anton",
+  weight: "400", // Anton ships a single (very heavy) weight
+  subsets: ["latin", "latin-ext"], // the name carries Ł / Ę
+  display: "swap",
+});
+
+const playfair = Playfair_Display({
+  variable: "--font-playfair",
+  subsets: ["latin", "latin-ext"], // accent phrase carries ą / ś
+  style: "italic",
+  display: "swap",
+  preload: false, // one accent phrase, not LCP — don't contend at t=0
+});
+
+const geistSans = Geist({
+  variable: "--font-geist-sans",
+  subsets: ["latin", "latin-ext"], // value line carries ą / ż / ó
+  display: "swap",
+  preload: false, // hero value line, not LCP — defer the preload
+});
 
 const bricolage = Bricolage_Grotesque({
   variable: "--font-bricolage",
   subsets: ["latin", "latin-ext"],
   display: "swap",
+  preload: false, // no longer on the first-paint hero — sections/menu only
 });
 
 const hanken = Hanken_Grotesk({
@@ -92,7 +122,7 @@ export default function RootLayout({
     <html
       lang="pl"
       data-scroll-behavior="smooth"
-      className={`${bricolage.variable} ${hanken.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${anton.variable} ${playfair.variable} ${geistSans.variable} ${bricolage.variable} ${hanken.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full">{children}</body>
     </html>

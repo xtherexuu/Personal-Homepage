@@ -44,6 +44,14 @@
   --font-display: var(--font-bricolage), "Arial Black", sans-serif;
   --font-sans: var(--font-hanken), system-ui, sans-serif;
   --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+
+  /* Hero type trio (all OFL / Google Fonts, self-hosted via next/font):
+     Anton — the ultra-heavy condensed display for the name;
+     Playfair italic — the serif accent phrase inside the value line;
+     Geist — the utility face carrying the value line itself. */
+  --font-hero: var(--font-anton), "Impact", "Arial Black", sans-serif;
+  --font-accent: var(--font-playfair), Georgia, serif;
+  --font-geist: var(--font-geist-sans), var(--font-hanken), system-ui, sans-serif;
 }
 
 /*
@@ -142,26 +150,24 @@ body {
 }
 
 /*
-  Outlined display text (hero name `.text-outline`, „żeby były" `.text-outline-zeby`)
-  that still SELECTS and COPIES cleanly. A clean outline comes from the
-  feMorphology filters (defined in hero-content.tsx / why-me.tsx) — unlike
-  -webkit-text-stroke this doesn't seam close letters or flood bold counters.
+  Outlined display text („żeby były" `.text-outline-zeby`) that still SELECTS and
+  COPIES cleanly. A clean outline comes from the feMorphology filters (defined in
+  why-me.tsx) — unlike -webkit-text-stroke this doesn't seam close letters or
+  flood bold counters.
 
   The trick: the REAL text is transparent (so it stays selectable + crawlable, the
-  hero shows through the interior, and ::selection paints a normal solid band over
-  it — identical to filled text), while a ::before duplicate (CSS-generated, NOT in
-  the DOM text, so it's never selected/copied) carries the filter. Putting the
-  filter on the pseudo instead of the real text is what keeps the selection
+  section shows through the interior, and ::selection paints a normal solid band
+  over it — identical to filled text), while a ::before duplicate (CSS-generated,
+  NOT in the DOM text, so it's never selected/copied) carries the filter. Putting
+  the filter on the pseudo instead of the real text is what keeps the selection
   highlight off the filter, so outlined and filled glyphs highlight the same. The
   pseudo's generated text gets an empty a11y alt (where supported) so it isn't read
   twice; the plain fallback keeps the outline visible in older browsers.
 */
-.text-outline,
 .text-outline-zeby {
   position: relative;
   color: transparent;
 }
-.text-outline::before,
 .text-outline-zeby::before {
   content: attr(data-text);
   position: absolute;
@@ -170,23 +176,85 @@ body {
   pointer-events: none;
 }
 @supports (content: "x" / "y") {
-  .text-outline::before,
   .text-outline-zeby::before {
     content: attr(data-text) / "";
   }
-}
-.text-outline::before {
-  filter: url(#name-outline-sm);
 }
 .text-outline-zeby::before {
   filter: url(#zeby-line-sm);
 }
 @media (min-width: 640px) {
-  .text-outline::before {
-    filter: url(#name-outline);
-  }
   .text-outline-zeby::before {
     filter: url(#zeby-line);
+  }
+}
+
+/*
+  Hero copy — one fluid unit for the whole composition. --hs is the h1 font-size
+  and every other hero measure (offsets, gaps, sub-sizes) derives from it, so the
+  block scales as a single piece from 500×300 up to 4K, portrait included.
+  min(vw, vh) self-bounds both axes with no fixed cap: the vw term keeps the name
+  inside the width, the vh term keeps the stacked copy inside the 100vh section.
+*/
+.hero-copy {
+  --hs: min(19vw, 16vh); /* narrow: centred stack — „BARTOSZ" ≈ 77vw wide */
+}
+@media (min-width: 1024px) {
+  .hero-copy {
+    /* wide: stepped left block. The name is vertically anchored (biased just
+       below centre via .hero-copy > div) and the value line sits ABOVE it. The
+       vh term (22) sizes the name on short / wide screens; the vw term (11.5)
+       CAPS it on tall 16:9 screens so the value line — which reaches
+       pl + ~6.5×--hs — still clears the nav rail on a 1920-wide viewport. */
+    --hs: min(11.5vw, 22vh);
+    /* Slide the name block toward the horizontal centre, but never so far that
+       the value line crosses the nav rail; floored (0.65×--hs) so it stays a
+       stepped-left block on viewports too narrow to centre. Middle term = the
+       true centre (½ the free space beside the ≈3.75×--hs name block). Last term
+       backs off so the value's right edge (pl + ~6.5×--hs) clears the nav rail —
+       whose footprint (label + padding) is ≈ max(200px, 12.5vw), growing with
+       width. This self-adapts from 1024px through 4K without breakpoints.
+       Exposed as --pl so the contact note can anchor to the name too. */
+    --pl: max(
+      calc(var(--hs) * 0.65),
+      min(
+        calc((100vw - var(--hs) * 3.75) / 2),
+        calc(100vw - max(200px, 12.5vw) - var(--hs) * 6.5)
+      )
+    );
+    padding-left: var(--pl);
+  }
+  /* Exact „Z pod R": a hidden "BA" prefix set in the same font/size/tracking
+     indents ZAŁĘSKI by precisely the rendered width of "BA" — the Z lands
+     under the R of BARTOSZ at every resolution, no magic numbers. */
+  .hero-zal::before {
+    content: "BA";
+    visibility: hidden;
+  }
+  /*
+    Contact note (wide layout) — mirrors the value line's offset so the two sit
+    symmetrically about the name. The value line's left edge is 0.78×--hs to the
+    RIGHT of BARTOSZ's Z; the note's right edge is the same 0.78×--hs to the LEFT
+    of ZAŁĘSKI's Z (whose left edge ≈ --pl + 0.944×--hs) → note-right = --pl +
+    0.168×--hs, hence the middle (preferred) `left` = that − width.
+    The clamp keeps it valid at both ends:
+      • floor 2vw — never runs off the left edge;
+      • ceiling --pl + 0.944×--hs − 12px − width — the note's right edge never
+        crosses ZAŁĘSKI's Z (avoids the overlap on narrow, nav-constrained
+        desktops where the name is jammed left and the symmetric spot is offscreen).
+    --note-w drives both the width and those calcs so they can't drift apart.
+  */
+  .hero-note {
+    --note-w: clamp(8.5rem, 14vw, 19rem);
+    position: absolute;
+    bottom: 5vh;
+    margin: 0;
+    width: var(--note-w);
+    left: clamp(
+      2vw,
+      calc(var(--pl) + var(--hs) * 0.168 - var(--note-w)),
+      calc(var(--pl) + var(--hs) * 0.944 - 12px - var(--note-w))
+    );
   }
 }
 
