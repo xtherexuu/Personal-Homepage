@@ -575,14 +575,15 @@ export function Hero({ children }: { children?: ReactNode }) {
         className="pointer-events-none absolute inset-0 h-full w-full"
       />
 
-      {/* Legibility scrim — dims the left where the copy sits, keeps the effect
-          vivid toward the right. Plus a soft floor for the lower elements. */}
+      {/* Legibility scrim — dims both flanks (left where the copy sits, right
+          under the nav rail) and keeps the mask vivid through the centre, plus a
+          soft floor for the lower elements. */}
       <div
         aria-hidden
         className="pointer-events-none absolute inset-0 z-[1]"
         style={{
           background:
-            "linear-gradient(96deg, rgba(11,26,28,0.94) 0%, rgba(11,26,28,0.72) 28%, rgba(11,26,28,0.32) 52%, rgba(11,26,28,0) 72%), linear-gradient(0deg, rgba(11,26,28,0.55) 0%, rgba(11,26,28,0) 32%)",
+            "linear-gradient(96deg, rgba(11,26,28,0.75) 0%, rgba(11,26,28,0.6) 20%, rgba(11,26,28,0.2) 35%, rgba(11,26,28,0) 50%), linear-gradient(-96deg, rgba(11,26,28,0.75) 0%, rgba(11,26,28,0.6) 10%, rgba(11,26,28,0.2) 25%, rgba(11,26,28,0) 50%), linear-gradient(0deg, rgba(11,26,28,0.55) 0%, rgba(11,26,28,0) 20%)",
         }}
       />
 

@@ -79,7 +79,7 @@ export function HeroContent() {
         {/* eyebrow — wide: flush to BARTOSZ's left edge, right above it */}
         <p
           style={rise(0.05, 12)}
-          className="hero-rise-blur pointer-events-auto order-1 inline-flex max-w-full flex-wrap items-center justify-center gap-x-[0.45em] gap-y-1 font-mono uppercase tracking-[0.28em] text-muted mb-[calc(var(--hs)*0.16)] text-[length:max(0.6rem,calc(var(--hs)*0.088))] lg:absolute lg:bottom-full lg:left-0 lg:mb-[calc(var(--hs)*0.16)] lg:justify-start"
+          className="hero-rise-blur pointer-events-auto order-1 inline-flex max-w-full flex-wrap items-center justify-center gap-x-[0.45em] gap-y-1 font-mono uppercase tracking-[0.28em] text-muted mb-[calc(var(--hs)*0.16)] text-[length:max(0.6rem,calc(var(--hs)*0.088))] lg:absolute lg:bottom-full lg:left-0 lg:mb-[calc(var(--hs)*0.09)] lg:justify-start lg:text-[length:max(0.6rem,calc(var(--hs)*0.072))]"
         >
           {/* Two atomic groups so the eyebrow never breaks into a lone trailing
               word: when it can't fit on one line it always splits as

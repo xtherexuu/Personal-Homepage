@@ -176,7 +176,15 @@ body {
   .hero-note {
     --note-w: clamp(8.5rem, 14vw, 19rem);
     position: absolute;
-    bottom: 5vh;
+    /* Vertical anchor: normally pinned near the section floor (5vh). But on TALL
+       wide viewports that floor drifts far below the name, so cap the drop — the
+       square note (941×941 → rendered height = --note-w) may sit at most ~7vh
+       below ZAŁĘSKI's baseline. The name's bottom edge is 58vh + 1.12×--hs (centre
+       50vh + the 8vh bias + one half of the 2-line, 1.12-leading h1); the note's
+       top is 100vh − bottom − --note-w, so bottom ≥ 35vh − --note-w − 1.12×--hs
+       keeps the gap ≤ 7vh. max() falls back to 5vh on shorter screens where that
+       term goes negative (the note then sits beside the name, as before). */
+    bottom: max(5vh, calc(35vh - var(--note-w) - var(--hs) * 1.12));
     margin: 0;
     width: var(--note-w);
     left: clamp(
