@@ -118,77 +118,6 @@ body {
   }
 }
 
-/* Scroll-down hint: the chevrons bob gently up and down (reduced-motion stills it
-   via the global block below). */
-@keyframes scroll-bob {
-  0%,
-  100% {
-    transform: translateY(0);
-  }
-  50% {
-    transform: translateY(38%);
-  }
-}
-.animate-scroll-bob {
-  animation: scroll-bob 1.5s ease-in-out infinite;
-}
-
-/* WhyMeReveal — each part fades + rises in when it (re)mounts on navigation.
-   prefers-reduced-motion collapses the duration/delay via the global block below. */
-@keyframes why-reveal-in {
-  from {
-    opacity: 0;
-    transform: translateY(12px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-.why-reveal-fade {
-  animation: why-reveal-in 0.55s cubic-bezier(0.16, 1, 0.3, 1) both;
-}
-
-/*
-  Outlined display text („żeby były" `.text-outline-zeby`) that still SELECTS and
-  COPIES cleanly. A clean outline comes from the feMorphology filters (defined in
-  why-me.tsx) — unlike -webkit-text-stroke this doesn't seam close letters or
-  flood bold counters.
-
-  The trick: the REAL text is transparent (so it stays selectable + crawlable, the
-  section shows through the interior, and ::selection paints a normal solid band
-  over it — identical to filled text), while a ::before duplicate (CSS-generated,
-  NOT in the DOM text, so it's never selected/copied) carries the filter. Putting
-  the filter on the pseudo instead of the real text is what keeps the selection
-  highlight off the filter, so outlined and filled glyphs highlight the same. The
-  pseudo's generated text gets an empty a11y alt (where supported) so it isn't read
-  twice; the plain fallback keeps the outline visible in older browsers.
-*/
-.text-outline-zeby {
-  position: relative;
-  color: transparent;
-}
-.text-outline-zeby::before {
-  content: attr(data-text);
-  position: absolute;
-  inset: 0;
-  color: #e8f2ee;
-  pointer-events: none;
-}
-@supports (content: "x" / "y") {
-  .text-outline-zeby::before {
-    content: attr(data-text) / "";
-  }
-}
-.text-outline-zeby::before {
-  filter: url(#zeby-line-sm);
-}
-@media (min-width: 640px) {
-  .text-outline-zeby::before {
-    filter: url(#zeby-line);
-  }
-}
-
 /*
   Hero copy — one fluid unit for the whole composition. --hs is the h1 font-size
   and every other hero measure (offsets, gaps, sub-sizes) derives from it, so the
@@ -296,6 +225,63 @@ body {
 .hero-rise-blur {
   animation: hero-rise-blur 0.85s cubic-bezier(0.16, 1, 0.3, 1) var(--rise-delay, 0s)
     both;
+}
+
+/*
+  "Dlaczego ja" — fluid display unit for the section header, the same idea as
+  the hero's --hs: --ws is the JA font-size and "dlaczego" derives from it, so
+  the pair scales as one piece. min(vw, vh) self-bounds both orientations; the
+  lg value tracks the hero h1 so JA reads at the same scale as BARTOSZ.
+*/
+.why-section {
+  --ws: min(30vw, 18vh);
+}
+@media (min-width: 1024px) {
+  .why-section {
+    --ws: min(13vw, 23vh);
+  }
+}
+
+/*
+  Why-section entrances — replayed on every visit: the classes are applied only
+  while the panel is active; removing them restores the hidden base state
+  (opacity-0 / translate-y-full / scale-y-0 utilities on the elements).
+  .why-in / .why-in-blur reuse the hero-rise keyframes; .why-mask-in rises a
+  letter out of an overflow-hidden wrapper; .why-line-in draws a grid hairline
+  top → bottom. Per-element timing via --rise-delay / --rise-y / --line-delay.
+  prefers-reduced-motion collapses all of it via the global block below.
+*/
+.why-in {
+  animation: hero-rise 0.85s cubic-bezier(0.16, 1, 0.3, 1) var(--rise-delay, 0s)
+    both;
+}
+.why-in-blur {
+  animation: hero-rise-blur 0.9s cubic-bezier(0.16, 1, 0.3, 1)
+    var(--rise-delay, 0s) both;
+}
+@keyframes why-mask-rise {
+  from {
+    transform: translateY(118%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+.why-mask-in {
+  animation: why-mask-rise 0.95s cubic-bezier(0.16, 1, 0.3, 1)
+    var(--rise-delay, 0s) both;
+}
+@keyframes why-line-draw {
+  from {
+    transform: scaleY(0);
+  }
+  to {
+    transform: scaleY(1);
+  }
+}
+.why-line-in {
+  animation: why-line-draw 1.1s cubic-bezier(0.16, 1, 0.3, 1)
+    var(--line-delay, 0s) both;
 }
 
 @media (prefers-reduced-motion: reduce) {

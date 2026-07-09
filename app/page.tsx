@@ -2,9 +2,7 @@ import { Hero } from "@/components/hero/hero";
 import { HeroContent } from "@/components/hero/hero-content";
 import { Panel } from "@/components/sections/panel";
 import { SectionDeck } from "@/components/sections/section-deck";
-import { WhyMe } from "@/components/sections/why-me";
-import { WhyMe2 } from "@/components/sections/why-me-2";
-import { WhyMeReveal } from "@/components/sections/why-me-reveal";
+import { Why } from "@/components/sections/why";
 import { SITE } from "@/lib/site";
 
 const jsonLd = {
@@ -83,13 +81,7 @@ export default function Home() {
             </Hero>
           </Panel>
           <Panel id="czemu-ja">
-            <WhyMe />
-          </Panel>
-          <Panel id="czemu-ja-2">
-            <WhyMe2 />
-          </Panel>
-          <Panel id="czemu-ja-3">
-            <WhyMeReveal />
+            <Why />
           </Panel>
         </SectionDeck>
       </main>

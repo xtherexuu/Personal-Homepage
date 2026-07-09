@@ -3,26 +3,32 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 
 import { SiteNav } from "@/components/nav/site-nav";
+import {
+  DeckWipe,
+  WIPE_COVER_MS,
+  WIPE_REVEAL_MS,
+  type WipePhase,
+} from "./deck-wipe";
 import { SectionContext, type SubNav } from "./section-context";
 
 /**
- * SectionDeck — full-page deck of stacked, crossfading sections driven by a
- * CUSTOM scroll (wheel / swipe / arrow keys) instead of native scrolling. One
- * decisive gesture advances exactly one panel; everything is clamped to the
- * available panels (you can't go below the last one yet). The deck also owns the
+ * SectionDeck — full-page deck of stacked sections driven by a CUSTOM scroll
+ * (wheel / swipe / arrow keys) instead of native scrolling. One decisive
+ * gesture advances exactly one panel; everything is clamped to the available
+ * panels (you can't go below the last one yet). Panel changes run through the
+ * DeckWipe: bars cover the screen, the panel swaps underneath, the bars lift
+ * away (reduced motion swaps instantly instead). The deck also owns the
  * mobile-menu open state so it can suspend gestures while the menu covers the
  * screen. The nav (rendered here, inside the provider) and the panels read all
  * of this from context.
  *
  * PANELS is the scroll order. Each panel belongs to a nav `section` (several
- * panels can share one — "Dlaczego ja?" spans czemu-ja + czemu-ja-2), so the rail
- * highlights by section while scrolling steps through panels. Extend as built.
+ * panels may share one), so the rail highlights by section while scrolling
+ * steps through panels. Extend as built.
  */
 const PANELS: readonly { id: string; section: string }[] = [
   { id: "hero", section: "hero" },
   { id: "czemu-ja", section: "czemu-ja" },
-  { id: "czemu-ja-2", section: "czemu-ja" },
-  { id: "czemu-ja-3", section: "czemu-ja" },
 ];
 const PANEL_IDS: readonly string[] = PANELS.map((p) => p.id);
 const sectionOf = (id: string) =>
@@ -78,8 +84,13 @@ function regionHasRoom(region: HTMLElement, dir: number): boolean {
   return false;
 }
 
-const TRANSITION_MS = 800; // crossfade length (keep in sync with <Panel>)
-const LOCK_MS = TRANSITION_MS + 150; // ignore further gestures until settled
+// Wipe choreography: bars rise (cover), a short beat while the screen is fully
+// dark — the panel swap lands here — then the bars lift away (reveal). Gestures
+// stay locked from the first bar to a little past the last.
+const WIPE_HOLD_MS = 70;
+const WIPE_SWAP_MS = WIPE_COVER_MS + WIPE_HOLD_MS;
+const WIPE_TOTAL_MS = WIPE_SWAP_MS + WIPE_REVEAL_MS + 120;
+const REDUCE_LOCK_MS = 250; // reduced motion: instant swap, short settle
 const WHEEL_THRESHOLD = 18; // px — ignore trackpad jitter
 const TOUCH_THRESHOLD = 48; // px — minimum swipe distance
 
@@ -96,11 +107,13 @@ const OVERSCROLL_COOLDOWN_MS = 380;
 export function SectionDeck({ children }: { children: ReactNode }) {
   const [active, setActive] = useState<string>(PANEL_IDS[0]);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [wipe, setWipe] = useState<WipePhase>(null);
 
   const activeRef = useRef(active);
   const menuOpenRef = useRef(menuOpen);
   const lockRef = useRef(false);
-  const lockTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const wipeSwapTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const wipeEndTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Active panel's internal step navigation (e.g. the reveal's parts) + the
   // boundary-overscroll accumulator that drives it.
@@ -126,8 +139,6 @@ export function SectionDeck({ children }: { children: ReactNode }) {
     if (lockRef.current) return;
     if (!PANEL_IDS.includes(id) || id === activeRef.current) return;
     lockRef.current = true;
-    activeRef.current = id;
-    setActive(id);
     // A panel change invalidates any in-progress sub-nav overscroll / cooldown, so
     // residue from the old panel can't swallow or misfire the first gesture on the
     // next one (or on this panel when it's revisited).
@@ -135,10 +146,32 @@ export function SectionDeck({ children }: { children: ReactNode }) {
     overscrollDirRef.current = 0;
     overscrollCoolRef.current = false;
     if (overscrollCoolTimer.current) clearTimeout(overscrollCoolTimer.current);
-    if (lockTimer.current) clearTimeout(lockTimer.current);
-    lockTimer.current = setTimeout(() => {
+    if (wipeSwapTimer.current) clearTimeout(wipeSwapTimer.current);
+    if (wipeEndTimer.current) clearTimeout(wipeEndTimer.current);
+
+    // Reduced motion: no wipe — swap instantly, release after a short settle.
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      activeRef.current = id;
+      setActive(id);
+      wipeEndTimer.current = setTimeout(() => {
+        lockRef.current = false;
+      }, REDUCE_LOCK_MS);
+      return;
+    }
+
+    // Wipe: cover the screen, swap the panel while it's fully dark, reveal.
+    // The outgoing panel stays active (its exit state untouched) until the
+    // swap, so nothing visibly changes before it's hidden behind the bars.
+    setWipe("cover");
+    wipeSwapTimer.current = setTimeout(() => {
+      activeRef.current = id;
+      setActive(id);
+      setWipe("reveal");
+    }, WIPE_SWAP_MS);
+    wipeEndTimer.current = setTimeout(() => {
+      setWipe(null);
       lockRef.current = false;
-    }, LOCK_MS);
+    }, WIPE_TOTAL_MS);
   }, []);
 
   const step = useCallback(
@@ -183,9 +216,8 @@ export function SectionDeck({ children }: { children: ReactNode }) {
     let idleTimer: ReturnType<typeof setTimeout> | null = null;
     const onWheel = (e: WheelEvent) => {
       if (menuOpenRef.current) return;
-      // A panel crossfade is in flight: swallow the whole wheel burst so its
-      // momentum tail can't scroll the incoming panel or over-advance its SubNav
-      // (e.g. landing on part 2/3 instead of 1/3 right after the transition).
+      // A wipe transition is in flight: swallow the whole wheel burst so its
+      // momentum tail can't scroll the incoming panel or over-advance its SubNav.
       // Scrolling resumes the moment the animation has settled (lock releases).
       if (lockRef.current) {
         e.preventDefault();
@@ -256,7 +288,7 @@ export function SectionDeck({ children }: { children: ReactNode }) {
     };
     const onTouchEnd = (e: TouchEvent) => {
       if (menuOpenRef.current) return;
-      // Ignore swipes while a panel crossfade is settling — same reason as the
+      // Ignore swipes while a wipe transition is settling — same reason as the
       // wheel guard above: a stray swipe mustn't over-advance the incoming panel.
       if (lockRef.current) return;
       const dy = (e.changedTouches[0]?.clientY ?? touchStartY) - touchStartY;
@@ -323,7 +355,8 @@ export function SectionDeck({ children }: { children: ReactNode }) {
 
   useEffect(
     () => () => {
-      if (lockTimer.current) clearTimeout(lockTimer.current);
+      if (wipeSwapTimer.current) clearTimeout(wipeSwapTimer.current);
+      if (wipeEndTimer.current) clearTimeout(wipeEndTimer.current);
       if (overscrollCoolTimer.current) clearTimeout(overscrollCoolTimer.current);
     },
     [],
@@ -364,6 +397,7 @@ export function SectionDeck({ children }: { children: ReactNode }) {
       }}
     >
       <div className="fixed inset-0 overflow-hidden">{children}</div>
+      <DeckWipe phase={wipe} />
       <SiteNav />
     </SectionContext.Provider>
   );

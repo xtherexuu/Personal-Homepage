@@ -20,8 +20,8 @@ import { cn } from "@/lib/utils";
  * display type, staggered in.
  *
  * Active state and navigation come from the <SectionDeck> via context — clicking
- * a section crossfades the deck to it (no native scrolling). Sections that aren't
- * built yet are listed but simply don't navigate.
+ * a section runs the deck's wipe transition to it (no native scrolling). Sections
+ * that aren't built yet are listed but simply don't navigate.
  */
 
 type Section = { id: string; label: string };
@@ -123,7 +123,7 @@ export function SiteNav() {
     }
   };
 
-  // Crossfade the deck to a section, then close the overlay. The links keep an
+  // Wipe the deck to a section, then close the overlay. The links keep an
   // href (SEO / right-click), but navigation is JS-driven so prevent the default.
   const go = (id: string) => (e: MouseEvent) => {
     e.preventDefault();

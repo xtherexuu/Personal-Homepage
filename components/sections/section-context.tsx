@@ -6,7 +6,7 @@ import { createContext, useContext } from "react";
  * Shared state for the full-screen section deck. The deck (provider) owns the
  * active panel, the custom-scroll transition, and the mobile-menu open state; the
  * nav and the panels consume it. No native scrolling happens — sections are
- * swapped with a crossfade.
+ * swapped behind the DeckWipe's column bars.
  */
 /**
  * A panel can own INTERNAL steps (e.g. the reveal's three parts). While it's
