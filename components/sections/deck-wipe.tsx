@@ -54,6 +54,14 @@ export function DeckWipe({ phase }: { phase: WipePhase }) {
                 : phase === "reveal"
                   ? `${REVEAL_BAR_MS}ms`
                   : undefined,
+            // Anti-seam: each bar is its own compositor layer (will-change), so at
+            // fractional device-pixel column boundaries a ~1px gap can flash between
+            // neighbours and leak the page behind this z-80 layer. Bleed the surface
+            // colour 1px left+right (offsetY 0, spread 0 → no vertical bleed, so the
+            // mint top/bottom hairlines stay crisp) so adjacent bars overlap and no
+            // seam can ever show. Travels with the layer through the vertical slide.
+            boxShadow:
+              "1px 0 0 0 var(--surface), -1px 0 0 0 var(--surface)",
           }}
           className={cn(
             "relative h-full w-full bg-surface will-change-transform",
