@@ -1,6 +1,19 @@
 "use client";
 
-import { useEffect, useRef, type MouseEvent } from "react";
+import {
+  type ComponentType,
+  type MouseEvent,
+  type SVGProps,
+  useEffect,
+  useRef,
+} from "react";
+import {
+  EnvelopeIcon,
+  HomeIcon,
+  SparklesIcon,
+  Squares2X2Icon,
+  TagIcon,
+} from "@heroicons/react/24/solid";
 
 import { MenuToggle } from "@/components/ui/menu-toggle";
 import { useSection } from "@/components/sections/section-context";
@@ -9,10 +22,14 @@ import { cn } from "@/lib/utils";
 /**
  * SiteNav — section navigation for the single-page deck.
  *
- * Desktop (lg+): a fixed vertical rail pinned to the right edge and vertically
- * centred. Each section is a label stacked above a bar; the active section gets a
- * thicker bar that elongates leftward with a mint glow and a larger mint label,
- * while the rest stay tiny and muted.
+ * Desktop (lg+): a fixed vertical rail of icon buttons pinned to the right edge
+ * and vertically centred (after sarthakmishra.com). A single solid-mint tile sits
+ * behind the ACTIVE icon and glides to it as the section changes; the active icon
+ * flips dark (text-bg) for contrast on the mint, the rest stay near-white with a
+ * dark halo so they read over the hero photo. Hovering / focusing an icon reveals
+ * its Polish label in a pill to the LEFT (the rail hugs the right edge, so labels
+ * open into the screen). The tile's offset is a deterministic inline transform
+ * (active index × --pitch), so SSR and first paint agree — no hydration jump.
  *
  * Mobile (<lg): the rail collapses to a hamburger in the top-right corner (the
  * MenuToggle, which morphs into a close arrow on open). Opening it covers the
@@ -24,16 +41,18 @@ import { cn } from "@/lib/utils";
  * that aren't built yet are listed but simply don't navigate.
  */
 
-type Section = { id: string; label: string };
+type Section = {
+  id: string;
+  label: string;
+  icon: ComponentType<SVGProps<SVGSVGElement>>;
+};
 
 const SECTIONS: Section[] = [
-  { id: "hero", label: "Główna" },
-  { id: "czemu-ja", label: "Dlaczego ja?" },
-  { id: "portfolio", label: "Projekty" },
-  { id: "oferta", label: "Oferta" },
-  { id: "proces", label: "Proces współpracy" },
-  { id: "faq", label: "FAQ" },
-  { id: "kontakt", label: "Kontakt" },
+  { id: "hero", label: "Główna", icon: HomeIcon },
+  { id: "czemu-ja", label: "Dlaczego ja?", icon: SparklesIcon },
+  { id: "portfolio", label: "Projekty", icon: Squares2X2Icon },
+  { id: "oferta", label: "Oferta", icon: TagIcon },
+  { id: "kontakt", label: "Kontakt", icon: EnvelopeIcon },
 ];
 
 // Soft expo easing — the same curve the hero entrance uses, so the rail and
@@ -47,6 +66,15 @@ export function SiteNav() {
     menuOpen: open,
     setMenuOpen: setOpen,
   } = useSection();
+
+  // Single source of truth for the rail: the active section's slot index drives
+  // the sliding tile's offset, the aria-current flag, and the active icon colour,
+  // so they can never point at different icons. Clamped ≥ 0 as a safety net (the
+  // active section is always one of SECTIONS, so this is really always 0..6).
+  const activeIndex = Math.max(
+    0,
+    SECTIONS.findIndex((s) => s.id === activeSection),
+  );
 
   const toggleRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLElement>(null);
@@ -133,41 +161,59 @@ export function SiteNav() {
 
   return (
     <>
-      {/* ---------- Desktop rail ---------- */}
+      {/* ---------- Desktop rail — icon buttons + sliding mint tile ---------- */}
       <nav
         aria-label="Sekcje strony"
-        className="fixed right-0 top-1/2 z-40 hidden -translate-y-1/2 select-none flex-col items-end gap-5 pr-5 lg:flex xl:pr-6 2xl:gap-6 2xl:pr-8 3xl:gap-7 3xl:pr-12"
+        className="group/rail fixed right-3 top-1/2 z-40 hidden -translate-y-1/2 isolate select-none flex-col items-center gap-0 [--pitch:3.25rem] lg:flex xl:right-5 2xl:right-6 3xl:right-10 3xl:[--pitch:3.75rem]"
       >
+        {/* Grey backing panel — fades in behind the icons whenever the rail is
+            hovered (after sarthakmishra.com). Sits below the tile + icons and
+            spills a little past them (-inset-2) for breathing room. */}
+        <span
+          aria-hidden
+          className="pointer-events-none absolute -inset-2 -z-10 rounded-3xl bg-surface/80 opacity-0 shadow-[0_10px_40px_-12px_rgba(0,0,0,0.6)] ring-1 ring-line backdrop-blur-md transition-opacity duration-300 group-hover/rail:opacity-100 motion-reduce:transition-none"
+        />
+        {/* Sliding accent tile — parked behind the active icon, glides between
+            slots. Decorative (aria-hidden); its offset is a deterministic inline
+            transform so it lands correctly on the very first paint. */}
+        <span
+          aria-hidden
+          style={{ transform: `translateY(calc(var(--pitch) * ${activeIndex}))` }}
+          className="pointer-events-none absolute left-0 top-0 z-0 h-[var(--pitch)] w-[var(--pitch)] rounded-2xl bg-mint shadow-[0_0_22px_-4px_rgba(61,220,151,0.6)] transition-transform duration-500 ease-[cubic-bezier(0.34,1.55,0.64,1)] motion-reduce:transition-none"
+        />
         {SECTIONS.map((s) => {
           const isActive = activeSection === s.id;
+          const Icon = s.icon;
           return (
             <a
               key={s.id}
               href={`#${s.id}`}
               onClick={go(s.id)}
+              aria-label={s.label}
               aria-current={isActive ? "true" : undefined}
-              className="group flex flex-col items-end gap-1.5 rounded-sm py-0.5 outline-none focus-visible:ring-2 focus-visible:ring-mint/60 focus-visible:ring-offset-4 focus-visible:ring-offset-bg 3xl:gap-2"
+              className="group relative z-10 flex h-[var(--pitch)] w-[var(--pitch)] items-center justify-center rounded-2xl outline-none focus-visible:ring-2 focus-visible:ring-mint focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
             >
-              <span
+              <Icon
+                aria-hidden
                 className={cn(
-                  "whitespace-nowrap text-right font-mono uppercase [text-shadow:0_1px_2px_rgba(11,26,28,0.95),0_0_10px_rgba(11,26,28,0.85)] transition-all duration-500",
-                  EASE,
+                  "size-6 transition-colors duration-300 group-hover:[animation:nav-icon-wiggle_0.5s_ease-in-out] 3xl:size-7",
                   isActive
-                    ? "text-[0.84rem] xl:text-[0.92rem] 2xl:text-[1rem] 3xl:text-[1.15rem] tracking-[0.2em] text-mint drop-shadow-[0_0_14px_rgba(61,220,151,0.45)]"
-                    : "text-[0.6rem] xl:text-[0.64rem] 2xl:text-[0.7rem] 3xl:text-[0.78rem] tracking-[0.18em] text-muted/65 group-hover:text-muted",
+                    ? "text-bg"
+                    : "text-paper/70 drop-shadow-[0_1px_2px_rgba(0,0,0,0.6)] group-hover:text-paper group-focus-visible:text-paper",
+                )}
+              />
+              {/* Label pill — revealed to the LEFT on hover / keyboard focus.
+                  Purely decorative (aria-hidden): the accessible name already
+                  lives on the link's aria-label, so screen-reader and keyboard
+                  users get it regardless of this visual hint. */}
+              <span
+                aria-hidden
+                className={cn(
+                  "pointer-events-none absolute right-full top-1/2 mr-3 -translate-y-1/2 translate-x-1 whitespace-nowrap rounded-md border border-line bg-surface/90 px-2.5 py-1 text-xs font-medium text-paper opacity-0 shadow-lg backdrop-blur-sm transition duration-200 ease-out group-hover:translate-x-0 group-hover:opacity-100 group-focus-visible:translate-x-0 group-focus-visible:opacity-100 motion-reduce:transition-none",
                 )}
               >
                 {s.label}
               </span>
-              <span
-                className={cn(
-                  "rounded-full transition-all duration-500",
-                  EASE,
-                  isActive
-                    ? "h-[3px] w-14 2xl:w-16 3xl:h-1 3xl:w-20 bg-mint shadow-[0_0_16px_-1px_rgba(61,220,151,0.75)]"
-                    : "h-[2px] w-6 2xl:w-7 3xl:w-8 bg-muted/40 group-hover:w-9 2xl:group-hover:w-10 3xl:group-hover:w-12 group-hover:bg-muted/70",
-                )}
-              />
             </a>
           );
         })}

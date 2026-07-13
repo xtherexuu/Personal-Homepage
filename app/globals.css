@@ -140,9 +140,11 @@ body {
        the value line crosses the nav rail; floored (0.65×--hs) so it stays a
        stepped-left block on viewports too narrow to centre. Middle term = the
        true centre (½ the free space beside the ≈3.75×--hs name block). Last term
-       backs off so the value's right edge (pl + ~6.5×--hs) clears the nav rail —
-       whose footprint (label + padding) is ≈ max(200px, 12.5vw), growing with
-       width. This self-adapts from 1024px through 4K without breakpoints.
+       backs off so the value's right edge (pl + ~6.5×--hs) clears the nav rail.
+       The reserve is ≈ max(200px, 12.5vw), growing with width — kept deliberately
+       generous: the icon rail itself is only ~--pitch wide, but its hover labels
+       open leftward toward the value line, so this headroom keeps them clear.
+       This self-adapts from 1024px through 4K without breakpoints.
        Exposed as --pl so the contact note can anchor to the name too. */
     --pl: max(
       calc(var(--hs) * 0.65),
@@ -290,6 +292,28 @@ body {
 .why-line-in {
   animation: why-line-draw 1.1s cubic-bezier(0.16, 1, 0.3, 1)
     var(--line-delay, 0s) both;
+}
+
+/* Nav-rail icon — a soft one-shot wiggle when its button is hovered. Applied via
+   a group-hover arbitrary-animation utility on the icon (site-nav). Reduced motion
+   collapses it to ~0 via the global block below. */
+@keyframes nav-icon-wiggle {
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+  22% {
+    transform: rotate(-8deg);
+  }
+  44% {
+    transform: rotate(6deg);
+  }
+  66% {
+    transform: rotate(-4deg);
+  }
+  84% {
+    transform: rotate(2deg);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
