@@ -23,10 +23,10 @@ import { cn } from "@/lib/utils";
  * SiteNav — section navigation for the single-page deck.
  *
  * Desktop (lg+): a fixed vertical rail of icon buttons pinned to the right edge
- * and vertically centred (after sarthakmishra.com). A single solid-mint tile sits
+ * and vertically centred (after sarthakmishra.com). A single solid --mint tile sits
  * behind the ACTIVE icon and glides to it as the section changes; the active icon
- * flips dark (text-bg) for contrast on the mint, the rest stay near-white with a
- * dark halo so they read over the hero photo. Hovering / focusing an icon reveals
+ * goes white on the mint, the rest stay near-white with a dark halo so they read
+ * over the hero photo. Hovering / focusing an icon reveals
  * its Polish label in a pill to the LEFT (the rail hugs the right edge, so labels
  * open into the screen). The tile's offset is a deterministic inline transform
  * (active index × --pitch), so SSR and first paint agree — no hydration jump.
@@ -198,7 +198,7 @@ export function SiteNav() {
                 className={cn(
                   "size-6 transition-colors duration-300 group-hover:[animation:nav-icon-wiggle_0.5s_ease-in-out] 3xl:size-7",
                   isActive
-                    ? "text-bg"
+                    ? "text-white"
                     : "text-paper/70 drop-shadow-[0_1px_2px_rgba(0,0,0,0.6)] group-hover:text-paper group-focus-visible:text-paper",
                 )}
               />

@@ -1,8 +1,4 @@
-import Image from "next/image";
 import type { CSSProperties } from "react";
-
-import contactLarge from "@/public/contact-large.png";
-import contactSmall from "@/public/contact-small.png";
 
 /**
  * HeroContent — text layer over the WebGL hero.
@@ -31,9 +27,9 @@ import contactSmall from "@/public/contact-small.png";
  * line just past where BARTOSZ ends (`left: 3.9×--hs` ≈ the name's right edge, so it
  * tracks the notch at every size without depending on the wider ZAŁĘSKI line).
  *
- * Below lg everything stacks centred: eyebrow → BARTOSZ → ZAŁĘSKI → value line.
- * The DOM keeps h1 first (crawlers / screen readers hear the name before the
- * tagline); the visual order is flex `order-*`. Every measure derives from --hs
+ * Below lg everything stacks centred: eyebrow → BARTOSZ → ZAŁĘSKI → value line →
+ * contact CTA. The DOM keeps h1 first (crawlers / screen readers hear the name
+ * before the tagline); the visual order is flex `order-*`. Every measure derives from --hs
  * (globals.css) so the block scales as one piece from 500×300 to 4K, portrait
  * included.
  */
@@ -45,11 +41,11 @@ const rise = (delay: number, y: number): CSSProperties =>
 export function HeroContent() {
   return (
     <div className="hero-copy pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-center px-6 py-[3vh] sm:px-10 lg:flex-row lg:justify-start lg:py-0 lg:pr-16">
-      {/* Mobile: the text column and the note below it are ONE centred group
-          (justify-center on the parent) — the note rides with the copy instead
-          of being pinned to the bottom, and being in flow it can never cover it.
+      {/* Mobile: eyebrow → name → value line → contact CTA stack as ONE centred
+          group (order-* on the children, justify-center on the parent), so the
+          button rides in flow right under the tagline and can never cover the copy.
           lg: this becomes the vertically-centred name block again, its absolute
-          eyebrow / value line anchored to its own (shrink-wrapped) box;
+          eyebrow / value line / CTA anchored to its own (shrink-wrapped) box;
           translate-y biases it just below centre to lower the value off the top. */}
       <div className="relative flex w-full flex-col items-center text-center lg:w-auto lg:translate-y-[8vh] lg:items-start lg:text-left">
         {/* name — both lines solid white; ZAŁĘSKI steps right via .hero-zal */}
@@ -76,6 +72,39 @@ export function HeroContent() {
           .
         </h2>
 
+        {/* Contact CTA — replaces the old pinned sticky-note. A clean solid-amber
+            pill (amber = the palette's single call-to-action token) placed directly
+            BELOW the value line. Mobile: in flow, centred right under the tagline
+            (order-4). lg: lifted out of flow into the open space to the RIGHT of the
+            name, pinned just under the value line's baseline — the line is
+            bottom-anchored (bottom-full), so that baseline is stable no matter how
+            many rows it wraps to, and the tagline itself never shifts up. Sizes and
+            offsets derive from --hs, so it scales with the whole block; padding is in
+            em so it tracks its own font-size. href stays a plain anchor until the
+            contact panel exists (matches the deck's other placeholder links). */}
+        <a
+          href="#kontakt"
+          aria-label="Porozmawiajmy o Twojej stronie — przejdź do kontaktu"
+          style={rise(0.6, 20)}
+          className="hero-rise-blur group/cta pointer-events-auto order-4 mt-[calc(var(--hs)*0.18)] inline-flex w-fit items-center gap-[0.55em] whitespace-nowrap rounded-full bg-amber py-[0.7em] pl-[1.35em] pr-[1.1em] font-geist font-semibold tracking-[-0.01em] text-bg shadow-[0_10px_30px_-8px_rgba(232,146,58,0.55)] transition-[transform,background-color,box-shadow] duration-300 ease-out will-change-transform hover:-translate-y-0.5 hover:bg-amber-strong hover:shadow-[0_16px_40px_-10px_rgba(232,146,58,0.72)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber focus-visible:ring-offset-2 focus-visible:ring-offset-bg active:translate-y-0 motion-reduce:transition-none text-[length:max(0.82rem,calc(var(--hs)*0.092))] lg:absolute lg:left-[calc(var(--hs)*3.9)] lg:top-0 lg:order-none lg:mt-0"
+        >
+          Porozmawiajmy o stronie
+          <svg
+            viewBox="0 0 20 20"
+            fill="none"
+            aria-hidden
+            className="size-[1.05em] shrink-0 transition-transform duration-300 ease-out group-hover/cta:translate-x-1 motion-reduce:transition-none"
+          >
+            <path
+              d="M4 10h11M11 5.5l4.5 4.5-4.5 4.5"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+        </a>
+
         {/* eyebrow — wide: flush to BARTOSZ's left edge, right above it */}
         <p
           style={rise(0.05, 12)}
@@ -95,35 +124,6 @@ export function HeroContent() {
           <span className="whitespace-nowrap">firm i marek</span>
         </p>
       </div>
-
-      {/* Contact CTA — a pinned sticky-note linking to the contact section.
-          Mobile: flows in at the very bottom of the stack (never overlaps the
-          copy); hidden on very short landscape where nothing else fits either.
-          lg (`.hero-note`, globals): absolutely placed bottom-left, its right
-          edge mirroring the value line's gap from the name (symmetric about the
-          block). On hover/focus it grows a touch and tips counter-clockwise about
-          its centre — as if nudged toward the top-left corner while pinned. The
-          two art-directed PNGs (landscape / square) swap at the lg breakpoint.
-          href is a plain anchor for now; wire to the deck nav once the contact
-          panel exists. */}
-      <a
-        href="#kontakt"
-        aria-label="Porozmawiajmy o Twojej stronie — przejdź do kontaktu"
-        className="hero-note group pointer-events-auto z-20 mt-[3vh] w-[min(72vw,42vh,18rem)] shrink-0 rounded-3xl transition-transform duration-300 ease-out will-change-transform hover:-rotate-[4deg] hover:scale-[1.06] focus-visible:-rotate-[4deg] focus-visible:scale-[1.06] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-mint focus-visible:ring-offset-4 focus-visible:ring-offset-bg motion-reduce:transition-none [@media(max-height:430px)]:hidden lg:mt-0"
-      >
-        <Image
-          src={contactSmall}
-          alt=""
-          sizes="(max-width: 1023px) min(72vw, 42vh, 18rem), 1px"
-          className="block h-auto w-full drop-shadow-[0_10px_22px_rgba(11,26,28,0.45)] lg:hidden"
-        />
-        <Image
-          src={contactLarge}
-          alt=""
-          sizes="(min-width: 1024px) clamp(8.5rem, 14vw, 19rem), 1px"
-          className="hidden h-auto w-full drop-shadow-[0_14px_28px_rgba(11,26,28,0.5)] lg:block"
-        />
-      </a>
     </div>
   );
 }
