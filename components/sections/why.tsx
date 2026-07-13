@@ -210,7 +210,7 @@ export function Why() {
                   <div
                     style={rise(0.75 + i * 0.1, 30)}
                     className={cn(
-                      "relative col-span-full mt-10 overflow-hidden md:mt-[7vh] md:min-h-[23rem] lg:min-h-[26rem]",
+                      "relative col-span-full mt-10 overflow-hidden md:mt-[7vh] md:min-h-[27rem] lg:min-h-[31rem] 3xl:min-h-[35rem]",
                       ROW_START[i],
                       IMG_COLS[side],
                       side === 1 && "lg:mt-[11vh]", // stagger the swapped row
@@ -230,14 +230,16 @@ export function Why() {
                       className="hidden object-cover md:block"
                       draggable={false}
                     />
-                    {/* Mobile banner (3:1), natural height above the copy */}
+                    {/* Mobile banner — cropped to a taller 9:4 box
+                        (object-cover trims only the decorative side margins) so
+                        it carries more presence above the copy. */}
                     <Image
                       src={item.small}
                       alt={item.alt}
                       placeholder="blur"
                       quality={75}
                       sizes={SMALL_SIZES}
-                      className="block w-full md:hidden"
+                      className="block aspect-[9/4] w-full object-cover md:hidden"
                       draggable={false}
                     />
                   </div>
@@ -251,11 +253,13 @@ export function Why() {
                       isActive ? "why-in" : "opacity-0",
                     )}
                   >
-                    <h3 className="text-pretty font-display font-bold leading-[1.1] tracking-[-0.015em] text-paper text-[clamp(1.5rem,1.05rem+1.5vw,2.6rem)]">
+                    <h3 className="text-pretty font-display font-bold leading-[1.05] tracking-[-0.015em] text-paper text-[clamp(2.15rem,1.25rem+3.1vw,3.9rem)]">
                       {item.title}
                       <span className="text-mint">?</span>
                     </h3>
-                    <p className="mt-[1.05em] max-w-[46ch] hyphens-auto text-justify leading-relaxed text-muted text-[clamp(1rem,0.92rem+0.4vw,1.28rem)]">
+                    {/* Justified by widening inter-word spaces only — no
+                        auto-hyphenation (hyphens-auto removed on request). */}
+                    <p className="mt-[1.05em] max-w-[46ch] text-justify leading-relaxed text-muted text-[clamp(1.2rem,1rem+0.78vw,1.68rem)]">
                       {item.body}
                     </p>
                   </div>
