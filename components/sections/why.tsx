@@ -6,6 +6,7 @@ import { useEffect, useRef, type CSSProperties } from "react";
 import { cn } from "@/lib/utils";
 import { COL_GRID, COL_VISIBILITY, MAX_COLS } from "./deck-columns";
 import { usePanelActive } from "./section-context";
+import { WhyBadges } from "./why-badges";
 
 // One art-directed pair per element: BIG = portrait (md+ column), SMALL = 3:1
 // landscape (mobile full-bleed banner). Static imports give next/image a blur
@@ -173,32 +174,47 @@ export function Why() {
                     The per-letter spans would be read "J A", so they're hidden
                     from the a11y tree and a sr-only "JA" carries the word. */}
                 <span className="sr-only">JA</span>
+                {/* The Anton „JA" rises out of an overflow mask; the open space to
+                    its right holds the interactive service-tag pile (WhyBadges).
+                    The row is items-stretch so the pile box is exactly as tall as
+                    the „JA" word, and pr-* reserves room for the nav rail / scrollbar. */}
                 <span
                   aria-hidden
-                  className="mt-[0.03em] block overflow-hidden font-hero uppercase leading-[0.98] text-[length:var(--ws)]"
+                  className="mt-[0.03em] flex items-stretch gap-4 pr-5 sm:gap-6 sm:pr-8 lg:gap-10 lg:pr-28 3xl:pr-36"
                 >
-                  <span className="flex">
-                    <span
-                      style={rise(0.58)}
-                      className={cn(
-                        "inline-block",
-                        isActive ? "why-mask-in" : "translate-y-full",
-                      )}
-                    >
-                      J
+                  <span className="block shrink-0 overflow-hidden font-hero uppercase leading-[0.98] text-[length:var(--ws)]">
+                    <span className="flex">
+                      <span
+                        style={rise(0.58)}
+                        className={cn(
+                          "inline-block",
+                          isActive ? "why-mask-in" : "translate-y-full",
+                        )}
+                      >
+                        J
+                      </span>
+                      <span
+                        style={rise(0.68)}
+                        className={cn(
+                          "inline-block",
+                          isActive ? "why-mask-in" : "translate-y-full",
+                        )}
+                      >
+                        A
+                      </span>
                     </span>
-                    <span
-                      style={rise(0.68)}
-                      className={cn(
-                        "inline-block",
-                        isActive ? "why-mask-in" : "translate-y-full",
-                      )}
-                    >
-                      A
-                    </span>
+                  </span>
+                  <span className="relative block min-w-0 flex-1 self-stretch">
+                    <WhyBadges active={isActive} />
                   </span>
                 </span>
               </h2>
+              {/* The pile is decorative (aria-hidden); expose the same terms to
+                  screen readers / crawlers as real text. */}
+              <p className="sr-only">
+                W każdej realizacji dbam o: responsywność, SEO, szybkość,
+                bezpieczeństwo, UX, UI, wdrożenie oraz wsparcie po publikacji.
+              </p>
             </header>
 
             {/* ---------- Three answers, sides alternating ---------- */}
