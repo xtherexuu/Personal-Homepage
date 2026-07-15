@@ -21,6 +21,14 @@ import heroBg from "@/public/hero-bg.jpg";
  * Drawn in a WebGL2 fragment shader (the only way to get the animated noise edge
  * GPU-cheaply). The <Image> underneath is the LCP image + graceful fallback (if
  * WebGL is unavailable the canvas hides and the photo shows).
+ *
+ * Perf safeguards — two independent mechanisms:
+ *  1. The context is created ONCE with failIfMajorPerformanceCaveat: software
+ *     rasterizers (no hardware acceleration) yield null, the canvas hides and
+ *     the static <Image> underneath is the gentle fallback.
+ *  2. An fps governor times real frames in ~1s windows and walks the QUALITY
+ *     ladder (render scale + voronoi kernel). Debug/UI handle: setHeroQuality()
+ *     from code, window.__heroQuality from the console.
  */
 
 const DARK: [number, number, number] = [0x0b / 255, 0x1a / 255, 0x1c / 255];
@@ -35,6 +43,47 @@ const VEL_GAIN = 0.22; // cursor speed (px/ms) -> directional smear strength (0.
 const TRACK = 0.92;
 const EASE = 0.14; // per-60fps-frame follow easing (frame-rate-independent below)
 const INTRO_MS = 1700;
+
+/**
+ * Render-quality ladder for the adaptive governor in draw(). Each level sets the
+ * two GPU levers this scene actually has (no lights / geometry here):
+ *  - rscale: backing-store scale (CSS size stays full; composes with the dpr <= 2
+ *    cap in resize()) — fragment count scales with rscale²
+ *  - kernel: voronoi kernel radius — 2 = 5x5 taps (reference look), 1 = 3x3
+ *    (~1/3 of the per-fragment ALU, marginally simpler mask edge)
+ * low therefore renders ~30% of high's fragments, each ~3x cheaper.
+ */
+const QUALITY = {
+  low: { rscale: 0.55, kernel: 1 },
+  medium: { rscale: 0.78, kernel: 2 },
+  high: { rscale: 1.0, kernel: 2 },
+} as const;
+const QUALITY_ORDER = ["low", "medium", "high"] as const;
+export type HeroQualityLevel = (typeof QUALITY_ORDER)[number];
+
+// fps-governor tuning (all thresholds live here). fps is averaged over ~1s of
+// wall-clock time (no fixed-Hz assumption); the 30–55 dead zone plus the change
+// cooldown is the hysteresis that stops flapping around a single threshold.
+const FPS_WINDOW_MS = 1000; // averaging window
+const FPS_DOWN = 30; // avg fps below → one level down
+const FPS_UP = 55; // avg fps above → one level up
+const QUALITY_COOLDOWN_MS = 2500; // min gap between level changes
+const GOVERNOR_WARMUP_MS = 1500; // ignore windows overlapping intro/compile jank
+
+// Debug/UI handle for the mounted hero (the deck mounts exactly one). A manual
+// set("low" | "medium" | "high") PINS the level (governor off); set("auto")
+// re-enables adaptation. Mirrored on window.__heroQuality for console testing.
+type QualityCtl = {
+  get: () => HeroQualityLevel;
+  set: (level: HeroQualityLevel | "auto") => void;
+};
+let qualityCtl: QualityCtl | null = null;
+/** Current hero render quality, or null while the WebGL renderer isn't up. */
+export const getHeroQuality = (): HeroQualityLevel | null =>
+  qualityCtl ? qualityCtl.get() : null;
+/** Force a quality level (pins it) or pass "auto" to resume fps adaptation. */
+export const setHeroQuality = (level: HeroQualityLevel | "auto"): void =>
+  qualityCtl?.set(level);
 
 const VERT = `#version 300 es
 const vec2 P[3] = vec2[3](vec2(-1.0,-1.0), vec2(3.0,-1.0), vec2(-1.0,3.0));
@@ -57,6 +106,7 @@ uniform float uGrain;   // STEADY (unboosted) time for the film grain
 uniform vec3  uDark;
 uniform sampler2D uTex;
 uniform vec2  uTexRes;
+uniform int   uKernel;  // voronoi kernel radius: 2 = 5x5 (full), 1 = 3x3 (low quality)
 
 const float PI = 3.14159265359;
 mat2 rot(float a){ return mat2(cos(a), -sin(a), sin(a), cos(a)); }
@@ -76,6 +126,7 @@ float voronoise(vec2 uv, float time, float phase){
   float va = 0.0, wt = 0.0;
   for(int j=-2;j<=2;j++)
   for(int i=-2;i<=2;i++){
+    if (abs(i) > uKernel || abs(j) > uKernel) continue; // quality-governed taps
     vec2 g = vec2(float(i), float(j));
     vec3 o = hash3(p + g);
     // cells ORBIT (sin,cos) so the field flows organically rather than just bobbing
@@ -214,11 +265,19 @@ export function Hero({ children }: { children?: ReactNode }) {
     const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const coarseMQ = window.matchMedia("(hover: none) and (pointer: coarse)");
 
+    // One-shot context creation — never retried, and independent of the fps
+    // governor below. failIfMajorPerformanceCaveat refuses a context that would
+    // be software-rasterized (SwiftShader & co.): this full-screen shader on a
+    // CPU rasterizer burns 100% CPU for a slideshow. So null here (that flag,
+    // missing WebGL2, or a blocklisted driver) means "no adequate GPU" — skip
+    // the whole effect and leave the static <Image> as the gentle fallback.
+    // Browsers that ignore the flag still end up on the governor's lowest rung.
     const gl = canvas.getContext("webgl2", {
       alpha: false,
       antialias: false,
       premultipliedAlpha: false,
       powerPreference: "high-performance",
+      failIfMajorPerformanceCaveat: true,
     });
     if (!gl) {
       canvas.style.display = "none"; // graceful fallback: show the <Image>
@@ -259,13 +318,31 @@ export function Hero({ children }: { children?: ReactNode }) {
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
 
+    // Initial quality: a coarse guess from CPU threads + RAM (deviceMemory is
+    // Chromium-only, hardwareConcurrency gets clamped by some browsers — safe
+    // defaults cover both). Deliberately biased LOW: a too-low start self-heals
+    // by promotion within ~2 windows, a too-high start janks the intro. The
+    // governor in draw() then corrects it from measured fps. Reduced-motion
+    // renders a single static frame (no ongoing GPU cost), so it always gets
+    // full quality.
+    const cores = navigator.hardwareConcurrency || 4;
+    const mem =
+      (navigator as Navigator & { deviceMemory?: number }).deviceMemory ?? 4;
+    let level: HeroQualityLevel = reduce
+      ? "high"
+      : cores <= 4 || mem <= 2
+        ? "low"
+        : cores >= 8 && mem >= 6
+          ? "high"
+          : "medium";
+
     const st = {
-      w: 0, h: 0, dpr: 1, rscale: 1,
+      w: 0, h: 0, dpr: 1, rscale: QUALITY[level].rscale,
       mx: 0, my: 0, tx: 0, ty: 0,
       hasPointer: false, texW: 1, texH: 1,
       start: 0, last: 0, raf: 0, pollRaf: 0, running: false, disposed: false,
       prevTx: 0, prevTy: 0, boost: 0, sTime: 0, velX: 0, velY: 0,
-      emaDt: 0, perfFrames: 0, scaled: false,
+      fpsFrames: 0, fpsWindow: 0, lastChange: 0, pinned: false,
     };
 
     // Uniform locations + VAO are filled once the program links (finishInit below);
@@ -311,9 +388,9 @@ export function Hero({ children }: { children?: ReactNode }) {
       st.dpr = Math.min(window.devicePixelRatio || 1, 2);
       st.w = r.width;
       st.h = r.height;
-      // st.rscale (≤1) downscales ONLY the backing store on struggling phones; the
-      // CSS size and st.w/st.h (CSS px) stay full, so the mask geometry, pointer
-      // mapping and aspect ratio are unchanged.
+      // st.rscale (≤1) downscales ONLY the backing store (set by the QUALITY
+      // level); the CSS size and st.w/st.h (CSS px) stay full, so the mask
+      // geometry, pointer mapping and aspect ratio are unchanged.
       const bw = Math.max(1, Math.round(r.width * st.dpr * st.rscale));
       const bh = Math.max(1, Math.round(r.height * st.dpr * st.rscale));
       if (canvas.width !== bw || canvas.height !== bh) {
@@ -338,18 +415,31 @@ export function Hero({ children }: { children?: ReactNode }) {
       st.last = now;
       const elapsed = (now - st.start) / 1000;
 
-      // Adaptive resolution: on coarse/touch devices only, if the GPU is clearly
-      // struggling once past warm-up, drop the internal render scale ONCE (never
-      // back up). Fast phones stay full-res so the crisp look is kept where the GPU
-      // can afford it; a struggling phone trades a touch of grain size for a smooth
-      // frame-rate. The single switch lands during the busy intro so it can't pop.
-      if (coarseMQ.matches && !st.scaled && !reduce && elapsed > 0.5) {
-        st.perfFrames++;
-        st.emaDt = st.perfFrames === 1 ? dt : st.emaDt + (dt - st.emaDt) * 0.1;
-        if (st.perfFrames > 45 && st.emaDt > 22) { // sustained < ~45fps
-          st.rscale = 0.71; // ≈ half the fragments
-          st.scaled = true;
-          resize();
+      // Quality governor: average fps over ~1s wall-clock windows (counted from
+      // performance.now() timestamps — no fixed-Hz assumption). Per closed
+      // window: < FPS_DOWN → one level down, > FPS_UP → one level up; never more
+      // than one step per window, plus QUALITY_COOLDOWN_MS between changes, so
+      // the level can't oscillate around a threshold. Pauses never pollute a
+      // window (startLoop re-anchors it). Off under a manual setHeroQuality()
+      // pin and under reduced-motion (single static frame — nothing to measure).
+      if (!reduce && !st.pinned) {
+        st.fpsFrames++;
+        const win = now - st.fpsWindow;
+        if (win >= FPS_WINDOW_MS) {
+          const fps = (st.fpsFrames * 1000) / win;
+          st.fpsFrames = 0;
+          st.fpsWindow = now;
+          if (
+            now - st.start > GOVERNOR_WARMUP_MS &&
+            now - st.lastChange >= QUALITY_COOLDOWN_MS
+          ) {
+            const i = QUALITY_ORDER.indexOf(level);
+            const next = fps < FPS_DOWN ? i - 1 : fps > FPS_UP ? i + 1 : i;
+            if (next !== i && next >= 0 && next < QUALITY_ORDER.length) {
+              st.lastChange = now;
+              applyQuality(QUALITY_ORDER[next]);
+            }
+          }
         }
       }
 
@@ -410,6 +500,8 @@ export function Hero({ children }: { children?: ReactNode }) {
       if (st.running || st.disposed || !activeRef.current) return;
       st.running = true;
       st.last = performance.now();
+      st.fpsFrames = 0;
+      st.fpsWindow = st.last; // fresh fps window — a pause must not read as ~0fps
       st.raf = requestAnimationFrame(draw);
     };
     const stopLoop = () => {
@@ -419,6 +511,40 @@ export function Hero({ children }: { children?: ReactNode }) {
     // Let the panel-active effect above start/stop the loop as the section
     // enters / leaves view (startLoop's own guard blocks restarts while hidden).
     loopCtrl.current = (on: boolean) => (on ? startLoop() : stopLoop());
+
+    // Switch the live renderer to a quality level. Safe to call before the
+    // program links — it only records state then, and finishInit() applies it.
+    const applyQuality = (l: HeroQualityLevel) => {
+      if (level === l) return;
+      level = l;
+      st.rscale = QUALITY[l].rscale;
+      if (u) {
+        gl.uniform1i(u.kernel, QUALITY[l].kernel);
+        resize();
+        // reduced-motion has no loop — repaint its single frame at the new level
+        if (reduce && !st.running) draw(performance.now());
+      }
+    };
+    const dropQualityCtl = () => {
+      qualityCtl = null;
+      delete (window as Window & { __heroQuality?: QualityCtl }).__heroQuality;
+    };
+    qualityCtl = {
+      get: () => level,
+      set: (l) => {
+        if (l === "auto") {
+          st.pinned = false;
+          st.fpsFrames = 0;
+          st.fpsWindow = performance.now(); // a stale window must not decide
+          return;
+        }
+        if (!(l in QUALITY)) return; // window handle gets untyped console input
+        st.pinned = true; // manual choice wins until set("auto")
+        applyQuality(l);
+      },
+    };
+    (window as Window & { __heroQuality?: QualityCtl }).__heroQuality =
+      qualityCtl;
 
     const onMove = (e: PointerEvent) => {
       if (e.pointerType === "touch") return;
@@ -442,6 +568,7 @@ export function Hero({ children }: { children?: ReactNode }) {
       e.preventDefault();
       stopLoop();
       canvas.style.display = "none";
+      dropQualityCtl(); // renderer is dead — stop reporting/accepting levels
     };
 
     // Wire everything up once the shader program has linked (driven by the poll
@@ -458,6 +585,7 @@ export function Hero({ children }: { children?: ReactNode }) {
           vs && gl.getShaderInfoLog(vs),
         );
         canvas.style.display = "none"; // graceful fallback: show the <Image>
+        dropQualityCtl();
         return;
       }
       gl.useProgram(program);
@@ -473,13 +601,14 @@ export function Hero({ children }: { children?: ReactNode }) {
         radius: loc("uRadius"), intro: loc("uIntro"), turb: loc("uTurb"),
         levels: loc("uLevels"), speed: loc("uSpeed"), vel: loc("uVel"),
         grain: loc("uGrain"), dark: loc("uDark"), tex: loc("uTex"),
-        texRes: loc("uTexRes"),
+        texRes: loc("uTexRes"), kernel: loc("uKernel"),
       };
       gl.uniform3fv(u.dark, DARK);
       gl.uniform1i(u.tex, 0);
       gl.uniform1f(u.turb, TURBULENCE);
       gl.uniform1f(u.levels, LEVELS);
       gl.uniform1f(u.speed, SPEED);
+      gl.uniform1i(u.kernel, QUALITY[level].kernel);
 
       root.addEventListener("pointermove", onMove, { passive: true });
       ro = new ResizeObserver(() => {
@@ -532,6 +661,7 @@ export function Hero({ children }: { children?: ReactNode }) {
     return () => {
       st.disposed = true;
       loopCtrl.current = null;
+      dropQualityCtl();
       stopLoop();
       cancelAnimationFrame(st.pollRaf);
       root.removeEventListener("pointermove", onMove);
