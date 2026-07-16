@@ -1,6 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 
 import { SiteNav } from "@/components/nav/site-nav";
 import {
@@ -9,30 +16,49 @@ import {
   WIPE_REVEAL_MS,
   type WipePhase,
 } from "./deck-wipe";
-import { SectionContext, type SubNav } from "./section-context";
+import {
+  SectionActionsContext,
+  SectionContext,
+  type SubNav,
+} from "./section-context";
 
 /**
- * SectionDeck — full-page deck of stacked sections driven by a CUSTOM scroll
- * (wheel / swipe / arrow keys) instead of native scrolling. One decisive
- * gesture advances exactly one panel; everything is clamped to the available
- * panels (you can't go below the last one yet). Panel changes run through the
- * DeckWipe: bars cover the screen, the panel swaps underneath, the bars lift
- * away (reduced motion swaps instantly instead). The deck also owns the
- * mobile-menu open state so it can suspend gestures while the menu covers the
- * screen. The nav (rendered here, inside the provider) and the panels read all
- * of this from context.
+ * SectionDeck — the page is exactly TWO panels:
  *
- * PANELS is the scroll order. Each panel belongs to a nav `section` (several
- * panels may share one), so the rail highlights by section while scrolling
- * steps through panels. Extend as built.
+ *   hero    — the full-screen WebGL intro. It keeps its moment: leaving or
+ *             returning to it runs the DeckWipe (bars cover the screen, the
+ *             panel swaps underneath, the bars lift away).
+ *   content — every content section („Dlaczego ja?", „Moja oferta", …) stacked
+ *             inside ONE natively-scrolling region (see ScrollFlow). There is no
+ *             transition between them — you just scroll, normally.
+ *
+ * So the deck's custom wheel / swipe / arrow handling only ever does one thing:
+ * decide whether a gesture belongs to the content region (scroll it) or to the
+ * deck (wipe between hero and content). A gesture inside a [data-deck-scroll]
+ * region wins while that region can still scroll that way; only at its top edge
+ * does an upward gesture wipe back to the hero.
+ *
+ * The deck also owns the mobile-menu open state so it can suspend gestures while
+ * the menu covers the screen. The nav (rendered here, inside the provider) and
+ * the panels read all of this from context.
  */
-const PANELS: readonly { id: string; section: string }[] = [
-  { id: "hero", section: "hero" },
-  { id: "czemu-ja", section: "czemu-ja" },
-];
+const PANELS: readonly { id: string }[] = [{ id: "hero" }, { id: "content" }];
 const PANEL_IDS: readonly string[] = PANELS.map((p) => p.id);
-const sectionOf = (id: string) =>
-  PANELS.find((p) => p.id === id)?.section ?? id;
+
+/**
+ * Which panel each nav section lives in. Sections absent from this map simply
+ * aren't built yet, so navigating to them is a no-op (the nav still lists them).
+ * Add „kontakt": CONTENT_PANEL when that section lands — it needs no other
+ * change, it just becomes one more block in the scroll flow.
+ */
+const CONTENT_PANEL = "content";
+const SECTION_PANEL: Readonly<Record<string, string>> = {
+  hero: "hero",
+  "czemu-ja": CONTENT_PANEL,
+  oferta: CONTENT_PANEL,
+};
+/** Topmost section of the content flow — where the flow opens by default. */
+const FIRST_CONTENT_SECTION = "czemu-ja";
 
 /**
  * The deck owns vertical gestures, so an overflowing region inside a panel could
@@ -104,10 +130,35 @@ const OVERSCROLL_CAP = 120;
 const OVERSCROLL_STEP = 150;
 const OVERSCROLL_COOLDOWN_MS = 380;
 
+/**
+ * Scroll the content flow so `sectionId` sits at the top of the region. Called
+ * either instantly (mid-wipe, while the bars cover the screen) or smoothly (a
+ * nav click made while the flow is already on screen — an ordinary scroll, which
+ * is the whole point of the content panel). The content panel owns exactly one
+ * [data-deck-scroll] region, so a query is enough to find it — the same contract
+ * resolveScroll() already relies on. Measured off the rects rather than
+ * offsetTop, which would depend on whichever ancestor happens to be positioned.
+ */
+function scrollFlowTo(sectionId: string | null, smooth: boolean) {
+  const region = document.querySelector<HTMLElement>("[data-deck-scroll]");
+  if (!region) return;
+  const el = sectionId ? document.getElementById(sectionId) : null;
+  const top = el
+    ? el.getBoundingClientRect().top -
+      region.getBoundingClientRect().top +
+      region.scrollTop
+    : 0;
+  region.scrollTo({ top, behavior: smooth ? "smooth" : "auto" });
+}
+
 export function SectionDeck({ children }: { children: ReactNode }) {
   const [active, setActive] = useState<string>(PANEL_IDS[0]);
   const [menuOpen, setMenuOpen] = useState(false);
   const [wipe, setWipe] = useState<WipePhase>(null);
+  // Which content section the flow is currently showing — the nav rail's
+  // highlight while the content panel is up. ScrollFlow's spy keeps it honest as
+  // you scroll; go() sets it optimistically so a nav click highlights at once.
+  const [scrolledSection, setScrolledSection] = useState(FIRST_CONTENT_SECTION);
 
   const activeRef = useRef(active);
   const menuOpenRef = useRef(menuOpen);
@@ -135,10 +186,25 @@ export function SectionDeck({ children }: { children: ReactNode }) {
     menuOpenRef.current = menuOpen;
   }, [menuOpen]);
 
-  const transitionTo = useCallback((id: string) => {
+  /**
+   * Wipe to a panel. `target` is the content section to land on — applied while
+   * the bars fully cover the screen, so the flow is already in the right place
+   * when it's unveiled (no visible jump). Omit it to open the flow at the top.
+   */
+  const transitionTo = useCallback((id: string, target?: string) => {
     if (lockRef.current) return;
     if (!PANEL_IDS.includes(id) || id === activeRef.current) return;
     lockRef.current = true;
+
+    // Land the content flow on its target. Runs while the screen is covered, so
+    // the scroll is instant; the DOM region exists regardless of the panel's
+    // visibility (inactive panels are only `visibility:hidden`, still laid out).
+    const land = () => {
+      if (id !== CONTENT_PANEL) return;
+      const section = target ?? FIRST_CONTENT_SECTION;
+      scrollFlowTo(section === FIRST_CONTENT_SECTION ? null : section, false);
+      setScrolledSection(section);
+    };
     // A panel change invalidates any in-progress sub-nav overscroll / cooldown, so
     // residue from the old panel can't swallow or misfire the first gesture on the
     // next one (or on this panel when it's revisited).
@@ -153,6 +219,7 @@ export function SectionDeck({ children }: { children: ReactNode }) {
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
       activeRef.current = id;
       setActive(id);
+      land();
       wipeEndTimer.current = setTimeout(() => {
         lockRef.current = false;
       }, REDUCE_LOCK_MS);
@@ -166,6 +233,7 @@ export function SectionDeck({ children }: { children: ReactNode }) {
     wipeSwapTimer.current = setTimeout(() => {
       activeRef.current = id;
       setActive(id);
+      land();
       setWipe("reveal");
     }, WIPE_SWAP_MS);
     wipeEndTimer.current = setTimeout(() => {
@@ -184,15 +252,30 @@ export function SectionDeck({ children }: { children: ReactNode }) {
     [transitionTo],
   );
 
-  // Nav clicks pass a SECTION id → jump to that section's first panel (no-op for
-  // sections that don't exist yet).
+  // Nav clicks pass a SECTION id. If it lives in the panel we're already on, it's
+  // just a scroll (smooth — no wipe, since the flow is already on screen);
+  // otherwise wipe to its panel and land on it. Sections that aren't built yet
+  // aren't in SECTION_PANEL, so they no-op.
   const go = useCallback(
     (sectionId: string) => {
-      const first = PANELS.find((p) => p.section === sectionId);
-      if (first) transitionTo(first.id);
+      const panel = SECTION_PANEL[sectionId];
+      if (!panel) return;
+      if (panel === activeRef.current) {
+        if (panel === CONTENT_PANEL) {
+          setScrolledSection(sectionId);
+          scrollFlowTo(sectionId === FIRST_CONTENT_SECTION ? null : sectionId, true);
+        }
+        return;
+      }
+      transitionTo(panel, sectionId);
     },
     [transitionTo],
   );
+
+  // ScrollFlow's spy reports whichever content section is crossing its band.
+  const reportSection = useCallback((sectionId: string) => {
+    setScrolledSection(sectionId);
+  }, []);
 
   // Scroll-hint button → advance one panel (no-op at the last).
   const next = useCallback(() => step(1), [step]);
@@ -384,21 +467,38 @@ export function SectionDeck({ children }: { children: ReactNode }) {
     return () => document.removeEventListener("copy", onCopy);
   }, []);
 
+  // The hero is its own panel; the content panel spans several nav sections, so
+  // there the highlight follows the scroll, not the panel.
+  const activeSection = active === CONTENT_PANEL ? scrolledSection : active;
+
+  // Both values are memoised on purpose. This provider re-renders on every wipe
+  // phase and every scroll-spy tick, and an inline object literal would hand each
+  // consumer a fresh identity every time — re-rendering them all even when nothing
+  // they read changed.
+  //
+  // `actions` never changes identity (every member is a stable useCallback), so
+  // consumers that only CALL things — Offer's contact CTA, ScrollFlow's spy — are
+  // completely insulated from scrolling. That asymmetry mattered: Why never
+  // subscribes at all, so it was already immune, while Offer subscribed for `go`
+  // alone and re-rendered its whole card subtree mid-scroll. Same section the
+  // user reported as janky.
+  const actions = useMemo(
+    () => ({ go, next, setMenuOpen, registerSubNav, reportSection }),
+    [go, next, setMenuOpen, registerSubNav, reportSection],
+  );
+
+  const value = useMemo(
+    () => ({ active, activeSection, menuOpen, ...actions }),
+    [active, activeSection, menuOpen, actions],
+  );
+
   return (
-    <SectionContext.Provider
-      value={{
-        active,
-        activeSection: sectionOf(active),
-        go,
-        next,
-        menuOpen,
-        setMenuOpen,
-        registerSubNav,
-      }}
-    >
-      <div className="fixed inset-0 overflow-hidden">{children}</div>
-      <DeckWipe phase={wipe} />
-      <SiteNav />
-    </SectionContext.Provider>
+    <SectionActionsContext.Provider value={actions}>
+      <SectionContext.Provider value={value}>
+        <div className="fixed inset-0 overflow-hidden">{children}</div>
+        <DeckWipe phase={wipe} />
+        <SiteNav />
+      </SectionContext.Provider>
+    </SectionActionsContext.Provider>
   );
 }

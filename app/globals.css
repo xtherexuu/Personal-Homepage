@@ -8,6 +8,10 @@
 :root {
   --bg: #0b1a1c; /* base background — hero mask color */
   --surface: #102a28; /* raised surface / section break */
+  --surface-deep: #050d0e; /* sunk surface — DARKER than --bg, so a panel using it
+                              reads as cut into the page rather than laid on it.
+                              Currently the offer's fuller tier, set apart from the
+                              raised --surface of the one beside it. */
 
   --mint: #3ddc97; /* primary green accent */
   --mint-strong: #2fb985; /* green hover / pressed */
@@ -25,6 +29,7 @@
 @theme inline {
   --color-bg: var(--bg);
   --color-surface: var(--surface);
+  --color-surface-deep: var(--surface-deep);
   --color-mint: var(--mint);
   --color-mint-strong: var(--mint-strong);
   --color-amber: var(--amber);
@@ -253,13 +258,31 @@ body {
 }
 
 /*
-  Why-section entrances — replayed on every visit: the classes are applied only
-  while the panel is active; removing them restores the hidden base state
-  (opacity-0 / translate-y-full / scale-y-0 utilities on the elements).
-  .why-in / .why-in-blur reuse the hero-rise keyframes; .why-mask-in rises a
-  letter out of an overflow-hidden wrapper; .why-line-in draws a grid hairline
-  top → bottom. Per-element timing via --rise-delay / --rise-y / --line-delay.
-  prefers-reduced-motion collapses all of it via the global block below.
+  "Moja oferta" — the offer section reuses the „Dlaczego ja?" header treatment
+  (Playfair whisper over an Anton shout), so it gets the same kind of fluid unit.
+  --os is the shout's font-size and „moja" derives from it, exactly like --ws /
+  --hs. „OFERTA" is six condensed glyphs (vs „JA"'s two), so --os runs a touch
+  smaller than --ws to keep the word inside its column without clipping; the lg
+  value still tracks the hero h1 scale. min(vw, vh) self-bounds both orientations.
+*/
+.offer-section {
+  --os: min(21vw, 14vh);
+}
+@media (min-width: 1024px) {
+  .offer-section {
+    --os: min(12.5vw, 21vh);
+  }
+}
+
+/*
+  Section entrances (shared by „Dlaczego ja?" and „Moja oferta") — replayed on
+  every visit: the classes are applied only while the panel is active; removing
+  them restores the hidden base state (opacity-0 / translate-y-full / scale-y-0
+  utilities on the elements). .why-in / .why-in-blur reuse the hero-rise
+  keyframes; .why-mask-in rises a letter out of an overflow-hidden wrapper;
+  .why-line-in draws a grid hairline top → bottom. Per-element timing via
+  --rise-delay / --rise-y / --line-delay. prefers-reduced-motion collapses all
+  of it via the global block below.
 */
 .why-in {
   animation: hero-rise 0.85s cubic-bezier(0.16, 1, 0.3, 1) var(--rise-delay, 0s)

@@ -11,7 +11,6 @@ import {
   EnvelopeIcon,
   HomeIcon,
   SparklesIcon,
-  Squares2X2Icon,
   TagIcon,
 } from "@heroicons/react/24/solid";
 
@@ -50,7 +49,6 @@ type Section = {
 const SECTIONS: Section[] = [
   { id: "hero", label: "Główna", icon: HomeIcon },
   { id: "czemu-ja", label: "Dlaczego ja?", icon: SparklesIcon },
-  { id: "portfolio", label: "Projekty", icon: Squares2X2Icon },
   { id: "oferta", label: "Oferta", icon: TagIcon },
   { id: "kontakt", label: "Kontakt", icon: EnvelopeIcon },
 ];

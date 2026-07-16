@@ -1,6 +1,8 @@
 import { Hero } from "@/components/hero/hero";
 import { HeroContent } from "@/components/hero/hero-content";
+import { Offer } from "@/components/sections/offer";
 import { Panel } from "@/components/sections/panel";
+import { ScrollFlow } from "@/components/sections/scroll-flow";
 import { SectionDeck } from "@/components/sections/section-deck";
 import { Why } from "@/components/sections/why";
 import { SITE } from "@/lib/site";
@@ -80,8 +82,15 @@ export default function Home() {
               <HeroContent />
             </Hero>
           </Panel>
-          <Panel id="czemu-ja">
-            <Why />
+          {/* One panel, one scroller: every content section lives in the same
+              ordinary scroll flow, so there's no transition between them — only
+              the hero (above) keeps its full-screen wipe. Add „Kontakt" here
+              when it lands, plus its entry in the deck's SECTION_PANEL map. */}
+          <Panel id="content">
+            <ScrollFlow>
+              <Why />
+              <Offer />
+            </ScrollFlow>
           </Panel>
         </SectionDeck>
       </main>

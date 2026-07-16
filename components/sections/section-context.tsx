@@ -21,13 +21,15 @@ export type SubNav = {
 };
 
 export type SectionContextValue = {
-  active: string; // active PANEL id (a section can span several panels)
-  activeSection: string; // nav-section id of the active panel (for the rail/menu)
-  go: (sectionId: string) => void; // jump to a nav section (its first panel); no-op if absent
+  active: string; // active PANEL id (the content panel holds several nav sections)
+  activeSection: string; // nav-section id currently in view (for the rail/menu)
+  go: (sectionId: string) => void; // jump to a nav section; no-op if it isn't built yet
   next: () => void; // advance one panel (scroll-hint button); no-op at the end
   menuOpen: boolean;
   setMenuOpen: (open: boolean) => void;
   registerSubNav: (nav: SubNav | null) => void; // active panel opts into boundary sub-stepping
+  /** ScrollFlow's scroll-spy reports which content section is currently in view. */
+  reportSection: (sectionId: string) => void;
 };
 
 export const SectionContext = createContext<SectionContextValue | null>(null);
@@ -35,6 +37,33 @@ export const SectionContext = createContext<SectionContextValue | null>(null);
 export function useSection(): SectionContextValue {
   const ctx = useContext(SectionContext);
   if (!ctx) throw new Error("useSection must be used within <SectionDeck>");
+  return ctx;
+}
+
+/**
+ * The deck's ACTIONS, split out from the state above — and the split earns its
+ * keep. `activeSection` changes every time the scroll-spy crosses a section, so
+ * anything reading the full context re-renders on a scroll tick. Most consumers
+ * don't care: the offer section only wants `go` for its contact CTA, and
+ * ScrollFlow only wants `reportSection`. Because every action is a useCallback
+ * with stable deps, this value never changes identity, so subscribing here means
+ * never re-rendering for a scroll you don't read.
+ *
+ * Use `useSection` when you actually render the state (the nav rail's highlight,
+ * Panel's active flag); use `useSectionActions` when you only need to CALL
+ * something.
+ */
+export type SectionActions = Pick<
+  SectionContextValue,
+  "go" | "next" | "setMenuOpen" | "registerSubNav" | "reportSection"
+>;
+
+export const SectionActionsContext = createContext<SectionActions | null>(null);
+
+export function useSectionActions(): SectionActions {
+  const ctx = useContext(SectionActionsContext);
+  if (!ctx)
+    throw new Error("useSectionActions must be used within <SectionDeck>");
   return ctx;
 }
 
