@@ -21,6 +21,10 @@
   --paper: #e8f2ee; /* near-white — headings, name outline */
   --muted: #8fa9a2; /* muted greenish — body / secondary text */
   --line: rgba(143, 169, 162, 0.18); /* hairlines, pill borders */
+  --danger: #ff6b5e; /* form validation only — the one colour that must NOT read as
+                        an accent. Mint says "good", amber says "act"; an invalid
+                        field needs a third voice, warm enough to be legible on the
+                        near-black glass and clearly not a call-to-action. */
 
   --background: var(--bg);
   --foreground: var(--paper);
@@ -37,6 +41,7 @@
   --color-paper: var(--paper);
   --color-muted: var(--muted);
   --color-line: var(--line);
+  --color-danger: var(--danger);
 
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -60,10 +65,10 @@
 }
 
 /*
-  The section deck owns vertical gestures (custom scroll), so kill the browser's
-  pull-to-refresh and overscroll bounce — otherwise a downward swipe on a section
-  reloads the page instead of letting the deck navigate back. Pinch-zoom is left
-  intact (overscroll-behavior only affects overscroll, not zoom).
+  The whole page is one scroll region (see SectionDeck), so kill the browser's
+  pull-to-refresh and overscroll bounce — otherwise a hard flick at the top or
+  bottom reloads the page or rubber-bands the single-page layout. Pinch-zoom is
+  left intact (overscroll-behavior only affects overscroll, not zoom).
 */
 html,
 body {
@@ -71,11 +76,11 @@ body {
 }
 
 /*
-  Custom scrollbar for the deck's scrollable regions ([data-deck-scroll]) — a
-  thin, rounded, mint-tinted thumb floating over a transparent track. Narrower
-  than the OS default so it reads as modern and stays clear of the mobile menu
-  button in the top-right corner. The 2px transparent border + padding-box clip
-  insets the thumb so the visible bar is slim without losing a grabbable target.
+  Custom scrollbar for the page's scroll region ([data-deck-scroll]) — a thin,
+  rounded, mint-tinted thumb floating over a transparent track. Narrower than the
+  OS default so it reads as modern and stays clear of the mobile menu button in
+  the top-right corner. The 2px transparent border + padding-box clip insets the
+  thumb so the visible bar is slim without losing a grabbable target.
 */
 [data-deck-scroll] {
   scrollbar-width: thin; /* Firefox */
@@ -275,14 +280,41 @@ body {
 }
 
 /*
-  Section entrances (shared by „Dlaczego ja?" and „Moja oferta") — replayed on
-  every visit: the classes are applied only while the panel is active; removing
-  them restores the hidden base state (opacity-0 / translate-y-full / scale-y-0
-  utilities on the elements). .why-in / .why-in-blur reuse the hero-rise
-  keyframes; .why-mask-in rises a letter out of an overflow-hidden wrapper;
-  .why-line-in draws a grid hairline top → bottom. Per-element timing via
-  --rise-delay / --rise-y / --line-delay. prefers-reduced-motion collapses all
-  of it via the global block below.
+  "złap KONTAKT" — the third section built on the same „whisper + shout" header, so
+  it gets the same kind of fluid unit as --ws / --os / --hs.
+
+  The vh terms are IDENTICAL to --os: a shout's height doesn't depend on its letter
+  count, so wherever the header is height-bound „OFERTA" and „KONTAKT" have to read
+  at the same scale. Only the vw terms differ, and not by eye — they're --os × 6/7.
+  Anton is condensed enough that its caps advance ≈0.45em each almost regardless of
+  which letters they are (measured against the live font: 0.442em/letter across
+  OFERTA, 0.458em across KONTAKT), so a word's width tracks its letter count closely
+  enough to divide by it. Seven letters at 6/7 of --os therefore take ≈the width six
+  take at --os: at 1280×720 the two words end 37px apart, where an unscaled --cs
+  would have put KONTAKT ~83px past OFERTA and still climbing with the viewport.
+
+  That only levels them where BOTH words are width-bound. On a short viewport --os
+  hits its vh cap first and KONTAKT simply renders the smaller of the two — which is
+  the same trade --os already makes against --ws, and the same reason: a longer word
+  buys its length out of its size. Re-derive the vw term if the word ever changes.
+*/
+.contact-section {
+  --cs: min(18vw, 14vh); /* 21 × 6/7 */
+}
+@media (min-width: 1024px) {
+  .contact-section {
+    --cs: min(10.7vw, 21vh); /* 12.5 × 6/7 */
+  }
+}
+
+/*
+  Section entrances (shared by „Dlaczego ja?", „Moja oferta" and „Kontakt") —
+  played once the section scrolls into view (useReveal): the classes animate from
+  the hidden base state the utilities set in SSR (opacity-0 / translate-y-full /
+  scale-y-0). .why-in / .why-in-blur reuse the hero-rise keyframes; .why-mask-in
+  rises a letter out of an overflow-hidden wrapper; .why-line-in draws a section's
+  grid hairlines top → bottom, all together. Per-element timing via --rise-delay /
+  --rise-y. prefers-reduced-motion collapses all of it via the global block below.
 */
 .why-in {
   animation: hero-rise 0.85s cubic-bezier(0.16, 1, 0.3, 1) var(--rise-delay, 0s)
@@ -313,8 +345,7 @@ body {
   }
 }
 .why-line-in {
-  animation: why-line-draw 1.1s cubic-bezier(0.16, 1, 0.3, 1)
-    var(--line-delay, 0s) both;
+  animation: why-line-draw 1.1s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 /* Nav-rail icon — a soft one-shot wiggle when its button is hovered. Applied via

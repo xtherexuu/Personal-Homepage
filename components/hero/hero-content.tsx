@@ -50,9 +50,13 @@ export function HeroContent() {
       <div className="relative flex w-full flex-col items-center text-center lg:w-auto lg:translate-y-[8vh] lg:items-start lg:text-left">
         {/* name — both lines solid white; ZAŁĘSKI steps right via .hero-zal */}
         <h1 className="order-2 pointer-events-auto font-hero uppercase leading-[1.12] tracking-[-0.01em] text-paper drop-shadow-[0_3px_28px_rgba(11,26,28,0.55)] text-[length:var(--hs)]">
+          {/* The explicit space is for machines, not eyes: both spans are
+              display:block, so the text node collapses visually, but crawlers
+              and AI agents extracting raw text would otherwise read the h1 as
+              the single word „BartoszZałęski". */}
           <span style={rise(0.16, 36)} className="hero-rise block">
             Bartosz
-          </span>
+          </span>{" "}
           <span style={rise(0.28, 36)} className="hero-rise hero-zal block">
             Załęski
           </span>

@@ -3,6 +3,7 @@
 import { CheckIcon, MinusIcon } from "@heroicons/react/24/solid";
 import { useRef, type CSSProperties, type MouseEvent } from "react";
 
+import { TOPIC_APLIKACJA, TOPIC_WIZYTOWKA } from "@/lib/contact";
 import { cn } from "@/lib/utils";
 import { ColumnLines } from "./column-lines";
 import { COL_GRID } from "./deck-columns";
@@ -38,30 +39,30 @@ import { useReveal } from "./use-reveal";
  * cards, has to be re-rasterised every scrolled frame — that was measurably the
  * jank), the card halo is a box-shadow, and the glass is OPAQUE, which also stops
  * the hairline behind a card showing through as a seam. Nothing here declares
- * will-change: the hover lift is not worth a permanent compositor layer.
+ * will-change: the hover only fades a box-shadow in, which is not worth a
+ * permanent compositor layer.
  *
  *   • „Strona wizytówka" — the informational site (mint, the foundation tier),
  *   • „Aplikacja internetowa" — the app build (amber, the fuller tier), whose
  *     first line is „wszystko z pakietu Strona wizytówka".
  *
- * Each card is a gradient-bordered glass panel over a soft coloured glow that
- * warms on hover, lists what's included (mint checks) and — for the first —
- * what isn't (muted minuses), then closes with the recommendation and an amber
- * contact CTA (amber = the palette's single call-to-action, the same pill as
+ * Each card is a bordered glass panel that rests unlit and lights a soft
+ * coloured glow on hover, lists what's included (mint checks) and — for the
+ * first — what isn't (muted minuses), then closes with the recommendation and an
+ * amber contact CTA (amber = the palette's single call-to-action, the same pill as
  * the hero's). The two footers sink to the card base (mt-auto), so the buttons
  * line up however unevenly the lists run.
  *
- * Entrances replay on every visit, reusing the deck's shared reveal primitives
- * (.why-in / .why-in-blur / .why-mask-in in globals.css): „moja" blur-rises,
- * „OFERTA" unmasks letter by letter, then the two cards rise in, left then
- * right. They're gated by useReveal rather than the panel-active flag — this
- * section sits below the fold of a shared scrolling panel, so it comes alive
- * when you scroll to it, and the delays are tuned tight for that (a scroll
- * reveal has no wipe to hide behind). Reduced motion collapses it all via the
- * global block in globals.css.
+ * Entrances play once the section scrolls into view, reusing the shared reveal
+ * primitives (.why-in / .why-in-blur / .why-mask-in in globals.css): „moja"
+ * blur-rises, „OFERTA" unmasks letter by letter, then the two cards rise in, left
+ * then right. useReveal gates them per section — this one sits below the fold of
+ * the page's one scroll flow, so it comes alive when you scroll to it, and the
+ * delays are tuned tight for that. Reduced motion collapses it all via the global
+ * block in globals.css.
  *
  * The section owns no scroller of its own: it's simply the block below „Dlaczego
- * ja?" in the deck's one content flow (see ScrollFlow), reached by ordinary
+ * ja?" in the page's one scroll flow (see SectionDeck), reached by ordinary
  * scrolling with no transition between the two.
  */
 
@@ -69,6 +70,11 @@ type Pkg = {
   /** Mono eyebrow naming what the tier fundamentally is (not a bare number). */
   eyebrow: string;
   name: string;
+  /**
+   * The „Temat" this tier's CTA preselects in the contact form — a lib/contact
+   * TopicOption value, imported so it can't drift from the menu it has to match.
+   */
+  topic: string;
   tagline: string;
   includes: readonly string[];
   /** Only the foundation tier spells out what it deliberately leaves out. */
@@ -82,6 +88,7 @@ const PACKAGES: readonly Pkg[] = [
   {
     eyebrow: "Strona informacyjna",
     name: "Strona wizytówka",
+    topic: TOPIC_WIZYTOWKA,
     tagline:
       "Profesjonalna strona, która dobrze prezentuje Twoją markę i jasno pokazuje klientom, dlaczego warto wybrać właśnie Ciebie.",
     includes: [
@@ -108,6 +115,7 @@ const PACKAGES: readonly Pkg[] = [
   {
     eyebrow: "Aplikacja z funkcjami",
     name: "Aplikacja internetowa",
+    topic: TOPIC_APLIKACJA,
     tagline:
       "Rozbudowana strona z indywidualnymi funkcjami, która nie tylko prezentuje Twoją ofertę, ale również pomaga obsługiwać klientów i rozwijać biznes.",
     includes: [
@@ -157,8 +165,23 @@ const TINT = {
 //
 // The gutter is set from the CARDS, not from the cell: since the cell is fixed to
 // whole tracks, every pixel of gutter comes straight off the two cards (2:1).
+// Widening it is therefore never free — it narrows the cards, and narrow cards
+// make the section TALLER (see LIST). It buys the gutter anyway, because the two
+// cards touching reads worse than the section being 2% longer.
+//
+// It's in vw, not a fixed px step, and that's the actual fix rather than a bigger
+// number: the cell is a fixed FRACTION of the viewport (4/6 of it at lg, 6/8 at
+// 3xl), so a px gutter drifts against the cards it's separating — gap-14 was 18%
+// of a card at 1024 but only 14% at 1280, and gap-24 likewise 14% at 1920. Three
+// passes of nudging the px value (8 → 12 → 14/24) all came back „za mały odstęp"
+// because the number was never the problem. In vw the ratio holds still: ~24% of a
+// card across the whole range, which is what makes the channel read.
+//
+// The floor matters — below ~7vw the gutter stops clearing the cards' OWN inner
+// padding (p-8/p-10) by enough to separate them, which is what made the pair read
+// as one block: a channel between two boxes has to beat the channel inside them.
 const PAIR_CELL =
-  "col-span-full mx-5 mt-[6vh] grid gap-6 sm:mx-8 lg:col-span-4 lg:col-start-2 lg:mx-0 lg:mt-[7vh] lg:grid-cols-2 lg:gap-14 3xl:col-span-6 3xl:col-start-2 3xl:gap-24";
+  "col-span-full mx-5 mt-[6vh] grid gap-6 sm:mx-8 lg:col-span-4 lg:col-start-2 lg:mx-0 lg:mt-[7vh] lg:grid-cols-2 lg:gap-[7vw] 3xl:col-span-6 3xl:col-start-2 3xl:gap-[9vw]";
 
 // The lists carry essentially all of a card's height, so they're what goes to two
 // columns once there's width to spare — the header, the recommendation and the CTA
@@ -199,14 +222,14 @@ export function Offer() {
   // Actions only — subscribing to the full section context would re-render this
   // whole subtree (two cards, 24 list items and their icons) every time the
   // scroll-spy reports a new section, i.e. right as you scroll in here.
-  const { go } = useSectionActions();
+  const { goContact } = useSectionActions();
 
-  // CTA → the contact section, through the deck. „kontakt" isn't in the deck's
-  // SECTION_PANEL map yet, so `go` safely no-ops for now and simply begins
-  // working once that section lands; the href stays for SEO / right-click / no-JS.
-  const toContact = (e: MouseEvent) => {
+  // CTA → the „Wiadomość" form: scroll so the tiles sit at the top (form in view,
+  // not the „złap KONTAKT" header) and preselect this tier's „Temat". Curried by
+  // topic so each card carries its own. The href stays for SEO / right-click / no-JS.
+  const toContact = (topic: string) => (e: MouseEvent) => {
     e.preventDefault();
-    go("kontakt");
+    goContact(topic);
   };
 
   return (
@@ -232,7 +255,11 @@ export function Offer() {
       <div className={cn("relative grid pb-[16vh]", COL_GRID)}>
         {/* ---------- Header — „moja OFERTA": same treatment AND same left
              margin as Why's „dlaczego JA" ---------- */}
-        <header className="col-span-full pl-5 pt-[9vh] sm:pl-8 lg:pl-[4vw] lg:pt-[10vh]">
+        <header className="col-span-full pl-5 pt-[9vh] pb-[4vh] sm:pl-8 lg:pl-[4vw] lg:pt-[10vh] lg:pb-[5vh]">
+          {/* The h2 carries only the heading words („moja" + sr-only „Oferta",
+              with an explicit space so extractors don't read „mojaOferta");
+              the animated per-letter shout lives in an aria-hidden SIBLING so
+              crawlers see a clean heading instead of „mojaOfertaOFERTA". */}
           <h2 className="text-paper">
             <span
               style={rise(0.05, 22)}
@@ -242,30 +269,28 @@ export function Offer() {
               )}
             >
               moja
-            </span>
-            {/* The split spans would be read letter-by-letter, so they're hidden
-                from the a11y tree and an sr-only word carries „Oferta". */}
+            </span>{" "}
             <span className="sr-only">Oferta</span>
-            <span
-              aria-hidden
-              className="mt-[0.02em] block overflow-hidden font-hero uppercase leading-[0.98] text-[length:var(--os)]"
-            >
-              <span className="flex">
-                {OFERTA.map((ch, i) => (
-                  <span
-                    key={i}
-                    style={rise(0.12 + i * 0.045)}
-                    className={cn(
-                      "inline-block",
-                      revealed ? "why-mask-in" : "translate-y-full",
-                    )}
-                  >
-                    {ch}
-                  </span>
-                ))}
-              </span>
-            </span>
           </h2>
+          <div
+            aria-hidden
+            className="mt-[0.02em] block overflow-hidden font-hero uppercase leading-[0.98] text-paper text-[length:var(--os)]"
+          >
+            <span className="flex">
+              {OFERTA.map((ch, i) => (
+                <span
+                  key={i}
+                  style={rise(0.12 + i * 0.045)}
+                  className={cn(
+                    "inline-block",
+                    revealed ? "why-mask-in" : "translate-y-full",
+                  )}
+                >
+                  {ch}
+                </span>
+              ))}
+            </span>
+          </div>
         </header>
 
         {/* ---------- Two package tiers, on the middle tracks ---------- */}
@@ -275,19 +300,24 @@ export function Offer() {
               key={pkg.name}
               style={rise(0.2 + i * 0.12, 44)}
               className={cn(
-                // p-px + a FLAT background = a 1px border that reads the same all
-                // the way round. It used to be a gradient fading to --line at the
-                // bottom, which left the lower half of each card looking unlit.
-                // The halo is a box-shadow (a blurred rounded rect the compositor
-                // is happy with) rather than a blurred element behind the card.
-                // The hover lift animates `translate` — Tailwind v4's property
-                // for it, and deliberately NOT the `transform` the entrance
-                // animates, so the two compose instead of fighting. Hence the
-                // transition names `translate`, not `transform`.
-                "group relative flex flex-col rounded-[1.85rem] p-px transition-[translate,box-shadow] duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] hover:-translate-y-1.5 motion-reduce:transition-none",
+                // p-[2px] + a FLAT background = a 2px border that reads the same
+                // all the way round. It used to be a gradient fading to --line at
+                // the bottom, which left the lower half of each card looking
+                // unlit. Whatever this padding is, the inner radius has to be
+                // 1.85rem MINUS it, or the glass corners don't sit concentric.
+                //
+                // Hover only LIGHTS the card — it doesn't move, so it can't nudge
+                // the pointer off itself or fight the entrance transform. The
+                // halo is a box-shadow (a blurred rounded rect the compositor is
+                // happy with) rather than a blurred element behind the card, and
+                // it's declared at rest at its FULL hover geometry with a zero
+                // alpha: at rest that paints nothing, and on hover only the colour
+                // interpolates, so the glow fades up in place instead of growing
+                // out of the card's edge the way `none` → shadow would.
+                "group relative flex flex-col rounded-[1.85rem] p-[2px] transition-shadow duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] motion-reduce:transition-none",
                 pkg.featured
-                  ? "bg-amber/55 shadow-[0_0_70px_-14px_rgba(232,146,58,0.45)] hover:shadow-[0_0_90px_-10px_rgba(232,146,58,0.6)]"
-                  : "bg-mint/45 shadow-[0_0_60px_-16px_rgba(61,220,151,0.32)] hover:shadow-[0_0_80px_-12px_rgba(61,220,151,0.45)]",
+                  ? "bg-amber/55 shadow-[0_0_90px_-10px_rgba(232,146,58,0)] hover:shadow-[0_0_90px_-10px_rgba(232,146,58,0.6)]"
+                  : "bg-mint/45 shadow-[0_0_80px_-12px_rgba(61,220,151,0)] hover:shadow-[0_0_80px_-12px_rgba(61,220,151,0.45)]",
                 revealed ? "why-in" : "opacity-0",
               )}
             >
@@ -298,7 +328,7 @@ export function Offer() {
                   accents. */}
               <div
                 className={cn(
-                  "relative flex flex-1 flex-col overflow-hidden rounded-[calc(1.85rem-1px)]",
+                  "relative flex flex-1 flex-col overflow-hidden rounded-[calc(1.85rem-2px)]",
                   pkg.featured ? "bg-surface-deep" : "bg-surface",
                 )}
               >
@@ -390,7 +420,7 @@ export function Offer() {
 
                     <a
                       href="#kontakt"
-                      onClick={toContact}
+                      onClick={toContact(pkg.topic)}
                       aria-label={`${pkg.name} — porozmawiajmy o Twoim projekcie`}
                       // No whitespace-nowrap here, unlike the hero's pill: the
                       // hero needs it because it shrink-wraps inside an absolutely

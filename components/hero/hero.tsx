@@ -3,7 +3,6 @@
 import Image from "next/image";
 import { useEffect, useRef, type ReactNode } from "react";
 
-import { usePanelActive } from "@/components/sections/section-context";
 import heroBg from "@/public/hero-bg.jpg";
 
 /**
@@ -222,40 +221,6 @@ const easeOutExpo = (t: number) => (t >= 1 ? 1 : 1 - Math.pow(2, -10 * t));
 export function Hero({ children }: { children?: ReactNode }) {
   const rootRef = useRef<HTMLElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const isActive = usePanelActive();
-  const activeRef = useRef(true);
-  const prevActiveRef = useRef(true);
-  const loopCtrl = useRef<((on: boolean) => void) | null>(null);
-
-  // Pause the WebGL loop whenever this panel isn't the active section. The
-  // full-screen fragment shader is far too heavy to keep running behind a
-  // crossfaded-out panel — left running it saturates the compositor/GPU and
-  // starves every other animation (and the rest of the deck) of frames. On
-  // RE-activation we also hold it paused until the crossfade finishes, so the
-  // shader doesn't fight the panel's opacity/transform transition for the GPU
-  // (which would stall the crossfade). On first mount there's no crossfade, so
-  // it starts right away.
-  useEffect(() => {
-    const wasActive = prevActiveRef.current;
-    prevActiveRef.current = isActive;
-
-    if (!isActive) {
-      activeRef.current = false;
-      loopCtrl.current?.(false);
-      return;
-    }
-    if (wasActive) {
-      activeRef.current = true;
-      loopCtrl.current?.(true);
-      return;
-    }
-    activeRef.current = false; // stay paused through the crossfade
-    const t = setTimeout(() => {
-      activeRef.current = true;
-      loopCtrl.current?.(true);
-    }, 850);
-    return () => clearTimeout(t);
-  }, [isActive]);
 
   useEffect(() => {
     const root = rootRef.current;
@@ -497,7 +462,7 @@ export function Hero({ children }: { children?: ReactNode }) {
     };
 
     const startLoop = () => {
-      if (st.running || st.disposed || !activeRef.current) return;
+      if (st.running || st.disposed) return;
       st.running = true;
       st.last = performance.now();
       st.fpsFrames = 0;
@@ -508,9 +473,20 @@ export function Hero({ children }: { children?: ReactNode }) {
       st.running = false;
       cancelAnimationFrame(st.raf);
     };
-    // Let the panel-active effect above start/stop the loop as the section
-    // enters / leaves view (startLoop's own guard blocks restarts while hidden).
-    loopCtrl.current = (on: boolean) => (on ? startLoop() : stopLoop());
+
+    // The loop runs only while the hero is BOTH on screen and the tab is visible.
+    // The page is one native scroll, so once you scroll past the hero it leaves
+    // the viewport and this suspends the heavy full-screen shader — it must never
+    // keep burning the GPU behind the content below. `onScreen` is kept honest by
+    // the IntersectionObserver (finishInit); sync() is the single place that folds
+    // the two conditions into a start or a stop, so a tab-return can't restart an
+    // off-screen hero.
+    let onScreen = true;
+    const sync = () => {
+      if (reduce || st.disposed) return;
+      if (onScreen && !document.hidden) startLoop();
+      else stopLoop();
+    };
 
     // Switch the live renderer to a quality level. Safe to call before the
     // program links — it only records state then, and finishInit() applies it.
@@ -554,11 +530,7 @@ export function Hero({ children }: { children?: ReactNode }) {
       st.ty = st.h / 2 + (e.clientY - r.top - st.h / 2) * TRACK;
     };
 
-    const onVis = () => {
-      if (reduce) return;
-      if (document.hidden) stopLoop();
-      else startLoop();
-    };
+    const onVis = () => sync();
 
     // A real GL context loss (GPU reset, driver timeout) invalidates every GL
     // object and we don't rebuild them — so hide the now-dead canvas to reveal
@@ -622,8 +594,8 @@ export function Hero({ children }: { children?: ReactNode }) {
       io = new IntersectionObserver(
         ([entry]) => {
           if (reduce) return;
-          if (entry.isIntersecting && !document.hidden) startLoop();
-          else stopLoop();
+          onScreen = entry.isIntersecting;
+          sync();
         },
         { threshold: 0.01 },
       );
@@ -638,7 +610,13 @@ export function Hero({ children }: { children?: ReactNode }) {
         st.last = st.start;
         draw(st.start); // single static frame, centred
       } else {
-        startLoop();
+        // Seed on-screen from a rect so a hero that mounts already scrolled past
+        // (a reload landed deep in the page) doesn't start the loop; the observer
+        // above then keeps it honest.
+        const r0 = root.getBoundingClientRect();
+        const vh = window.innerHeight || document.documentElement.clientHeight;
+        onScreen = r0.bottom > 0 && r0.top < vh;
+        sync();
       }
     };
 
@@ -660,7 +638,6 @@ export function Hero({ children }: { children?: ReactNode }) {
 
     return () => {
       st.disposed = true;
-      loopCtrl.current = null;
       dropQualityCtl();
       stopLoop();
       cancelAnimationFrame(st.pollRaf);
@@ -681,6 +658,7 @@ export function Hero({ children }: { children?: ReactNode }) {
     <section
       ref={rootRef}
       id="hero"
+      data-nav-section="hero"
       data-copy-spaces
       className="relative h-dvh w-full overflow-hidden bg-[#0b1a1c]"
     >

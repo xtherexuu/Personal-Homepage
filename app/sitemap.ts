@@ -7,7 +7,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
     {
       url: SITE,
       // bump when the page content meaningfully changes
-      lastModified: "2026-06-25",
+      lastModified: "2026-07-17",
       changeFrequency: "monthly",
       priority: 1,
     },

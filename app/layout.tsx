@@ -60,8 +60,9 @@ export const metadata: Metadata = {
     default: "Bartosz Załęski — Strony internetowe dla firm i marek",
     template: "%s · Bartosz Załęski",
   },
+  // ≤160 chars — Google truncates around 155–160, so the pitch has to land whole.
   description:
-    "Projektuję i wdrażam nowoczesne, szybkie strony internetowe, które budują zaufanie i zdobywają klientów. Dopracowany design, responsywność, podstawowe SEO, wdrożenie i wsparcie po publikacji — od pomysłu do gotowej strony.",
+    "Projektuję i wdrażam nowoczesne, szybkie strony internetowe, które budują zaufanie i zdobywają klientów. Design, responsywność, SEO, wdrożenie i wsparcie.",
   keywords: [
     "strony internetowe",
     "tworzenie stron internetowych",
@@ -124,7 +125,25 @@ export default function RootLayout({
       data-scroll-behavior="smooth"
       className={`${anton.variable} ${playfair.variable} ${geistSans.variable} ${bricolage.variable} ${hanken.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full">{children}</body>
+      <body className="min-h-full">
+        {/* No-JS fallback: the content sections gate their entrance on JS
+            (useReveal leaves opacity-0 / translate-y-full / scale-y-0 in the SSR
+            HTML), and the page's scroll region is a fixed-height overflow box, so
+            without scripts the sections rendered hidden inside a non-scrolling
+            frame. Turn the region into ordinary document flow and lift the
+            entrance states — scoped to the section attributes so nothing else
+            (the nav overlay) is touched. The hero's entrance is pure CSS, so it
+            needs nothing here. */}
+        <noscript>
+          <style>{`
+            [data-deck-scroll] { height: auto !important; overflow: visible !important; }
+            [data-copy-spaces] .opacity-0 { opacity: 1 !important; }
+            [data-copy-spaces] .translate-y-full { translate: none !important; }
+            [data-copy-spaces] .scale-y-0 { scale: none !important; }
+          `}</style>
+        </noscript>
+        {children}
+      </body>
     </html>
   );
 }

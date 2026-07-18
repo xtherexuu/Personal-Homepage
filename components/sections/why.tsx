@@ -23,7 +23,7 @@ import resultSmall from "@/public/why/PH-finalnyEfekt-SMALL-opt.jpg";
 /**
  * Why — the "Dlaczego ja?" section: one editorial block (after eszterbial.com).
  * The viewport is divided into equal columns by hairlines (deck-columns — the
- * same rectangles the DeckWipe bars cover), and everything snaps to that grid:
+ * shared column grid), and everything snaps to that grid:
  *
  *   ┌─┬───────┬───────┬─┐
  *   │ dlaczego               │  ← Playfair italic
@@ -36,19 +36,18 @@ import resultSmall from "@/public/why/PH-finalnyEfekt-SMALL-opt.jpg";
  * Three rows answer the three doubts a prospective client actually has; each
  * question's "?" is set in mint — the one recurring accent.
  *
- * This is the first block of the deck's content flow (see ScrollFlow), which is
- * one ordinary scrolling region: the section no longer owns a scroller or a
- * viewport height, it's simply as tall as its content and „Moja oferta" follows
- * directly below it with no transition. The hairline layer spans the section
- * (absolute inset-0), and the scrollbar lives on the flow outside it, so the
- * lines still align with the content grid.
+ * This block sits in the page's one scroll flow (see SectionDeck), an ordinary
+ * scrolling region: the section owns no scroller or viewport height of its own,
+ * it's simply as tall as its content and „Moja oferta" follows directly below it
+ * with no transition. The hairline layer spans the section (absolute inset-0),
+ * and the scrollbar lives on the flow outside it, so the lines still align with
+ * the content grid.
  *
- * Entrances replay on each visit and are gated by useReveal (in view + panel
- * active): the grid hairlines draw top → bottom as the wipe reveal finishes,
- * "dlaczego" blur-rises, JA's letters rise out of an overflow mask, rows
- * fade-rise. Delays are tuned so content emerges just as its columns are
- * unveiled (the wipe releases bars left → right). Reduced motion collapses all
- * of it via the global block in globals.css.
+ * Entrances play once the section scrolls into view (useReveal): the grid
+ * hairlines draw top → bottom, „dlaczego" blur-rises, JA's letters rise out of an
+ * overflow mask, rows fade-rise. Delays stagger the pieces left → right so the
+ * block assembles as one. Reduced motion collapses all of it via the global block
+ * in globals.css.
  */
 
 type Item = {
@@ -144,8 +143,13 @@ export function Why() {
             sized by --ws (globals.css) to match the hero h1. */}
         <header
           ref={headerRef}
-          className="col-span-full pl-5 pt-[9vh] sm:pl-8 lg:pl-[4vw] lg:pt-[10vh]"
+          className="col-span-full pl-5 pt-[9vh] pb-[4vh] sm:pl-8 lg:pl-[4vw] lg:pt-[10vh] lg:pb-[5vh]"
         >
+          {/* The h2 carries ONLY the heading words — the visible „dlaczego"
+              plus a sr-only „JA" (the animated per-letter spans below would be
+              read "J A" and, worse, the h2 used to swallow the whole service-tag
+              pile, so crawlers saw a keyword-stuffed gibberish heading). The
+              explicit space keeps text extractors from reading „dlaczegoJA". */}
           <h2 className="text-paper">
             <span
               style={rise(0.5, 22)}
@@ -155,46 +159,46 @@ export function Why() {
               )}
             >
               dlaczego
-            </span>
-            {/* overflow mask — the letters rise out of it one after another.
-                The per-letter spans would be read "J A", so they're hidden
-                from the a11y tree and a sr-only "JA" carries the word. */}
+            </span>{" "}
             <span className="sr-only">JA</span>
-            {/* The Anton „JA" rises out of an overflow mask; the open space to
-                its right holds the interactive service-tag pile (WhyBadges).
-                The row is items-stretch so the pile box is exactly as tall as
-                the „JA" word, and pr-* reserves room for the nav rail / scrollbar. */}
-            <span
-              aria-hidden
-              className="mt-[0.03em] flex items-stretch gap-4 pr-5 sm:gap-6 sm:pr-8 lg:gap-10 lg:pr-28 3xl:pr-36"
-            >
-              <span className="block shrink-0 overflow-hidden font-hero uppercase leading-[0.98] text-[length:var(--ws)]">
-                <span className="flex">
-                  <span
-                    style={rise(0.58)}
-                    className={cn(
-                      "inline-block",
-                      revealed ? "why-mask-in" : "translate-y-full",
-                    )}
-                  >
-                    J
-                  </span>
-                  <span
-                    style={rise(0.68)}
-                    className={cn(
-                      "inline-block",
-                      revealed ? "why-mask-in" : "translate-y-full",
-                    )}
-                  >
-                    A
-                  </span>
+          </h2>
+          {/* The Anton „JA" rises out of an overflow mask; the open space to
+              its right holds the interactive service-tag pile (WhyBadges).
+              The row is items-stretch so the pile box is exactly as tall as
+              the „JA" word, and pr-* reserves room for the nav rail / scrollbar.
+              A sibling of the h2 (not its child) so the heading stays clean for
+              search/AI crawlers; text-paper is restated since it no longer
+              inherits the h2's ink. */}
+          <div
+            aria-hidden
+            className="mt-[0.03em] flex items-stretch gap-4 pr-5 text-paper sm:gap-6 sm:pr-8 lg:gap-10 lg:pr-28 3xl:pr-36"
+          >
+            <span className="block shrink-0 overflow-hidden font-hero uppercase leading-[0.98] text-[length:var(--ws)]">
+              <span className="flex">
+                <span
+                  style={rise(0.58)}
+                  className={cn(
+                    "inline-block",
+                    revealed ? "why-mask-in" : "translate-y-full",
+                  )}
+                >
+                  J
+                </span>
+                <span
+                  style={rise(0.68)}
+                  className={cn(
+                    "inline-block",
+                    revealed ? "why-mask-in" : "translate-y-full",
+                  )}
+                >
+                  A
                 </span>
               </span>
-              <span className="relative block min-w-0 flex-1 self-stretch">
-                <WhyBadges active={headerInView} />
-              </span>
             </span>
-          </h2>
+            <span className="relative block min-w-0 flex-1 self-stretch">
+              <WhyBadges active={headerInView} />
+            </span>
+          </div>
           {/* The pile is decorative (aria-hidden); expose the same terms to
               screen readers / crawlers as real text. */}
           <p className="sr-only">

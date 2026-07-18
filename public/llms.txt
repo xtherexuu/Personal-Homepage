@@ -9,6 +9,10 @@
 - Wdrożenie online, pomoc z domeną i hostingiem
 - Wsparcie, poprawki i rozwój strony po publikacji
 
+## Oferta (dwa pakiety)
+- Strona wizytówka — profesjonalna strona informacyjna: indywidualny projekt graficzny, pełna responsywność, szybkie ładowanie, zaawansowana optymalizacja SEO, nielimitowana liczba sekcji, przygotowanie do publikacji. Najlepsza dla firm i specjalistów, którzy potrzebują skutecznej strony bez rozbudowanego systemu.
+- Aplikacja internetowa — wszystko z pakietu „Strona wizytówka" plus: panel samodzielnej edycji treści, blog/aktualności, formularze z obsługą backendu, prosty sklep lub sprzedaż biletów, system rezerwacji, płatności online, baza danych i możliwość dalszej rozbudowy. Najlepsza, gdy strona ma aktywnie wspierać i automatyzować biznes.
+
 ## Usługi
 - Strony internetowe dla firm — wizerunkowe i ofertowe strony, które budują zaufanie i prowadzą do kontaktu.
 - Landing page — jednostronicowe strony pod konkretny cel (kampania, usługa, zapisy).
@@ -21,4 +25,7 @@ Firmy, marki osobiste, usługodawcy i małe biznesy, które potrzebują profesjo
 
 ## Kontakt
 - Strona: https://bartoszzaleski.com
+- E-mail: contact@bartoszzaleski.com
+- Instagram: https://www.instagram.com/xtherexuu/
+- Facebook: https://www.facebook.com/profile.php?id=61592054667370
 - Formularz kontaktowy na stronie (sekcja „Kontakt").
