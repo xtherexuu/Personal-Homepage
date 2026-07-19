@@ -121,6 +121,27 @@ body {
   color: var(--bg);
 }
 
+/* The panel is a different world: the global rule above also sets a dark
+   `color`, which on the admin's dark surfaces would paint selected text nearly
+   invisible (worst on the select-all e-mail). Re-state BOTH properties scoped
+   to the panel, and give the paper sheets their own dark-on-light selection. */
+[data-admin] ::selection {
+  background: var(--ap-accent-soft);
+  color: var(--ap-text);
+}
+[data-admin] ::-moz-selection {
+  background: var(--ap-accent-soft);
+  color: var(--ap-text);
+}
+[data-admin] .ap-sheet ::selection {
+  background: #cfe0ff;
+  color: var(--ap-paper-ink);
+}
+[data-admin] .ap-sheet ::-moz-selection {
+  background: #cfe0ff;
+  color: var(--ap-paper-ink);
+}
+
 /* Smooth anchor scrolling for the section nav + hero CTAs (motion-safe only). */
 @media (prefers-reduced-motion: no-preference) {
   html {
@@ -379,4 +400,113 @@ body {
     animation-delay: 0s !important; /* no staggered flashing — show composed at once */
     transition-duration: 0.001ms !important;
   }
+}
+
+/* ────────────────────────────────────────────────────────────────────────────
+   Admin panel (/admin) — its own quiet palette, deliberately NOT the site's.
+   A graphite-blue desk; anything that IS the e-mail (the composer, sent
+   replies) renders on paper-white "sheets", because the mail itself will —
+   the light surface is WYSIWYG, not decoration. Scoped under [data-admin];
+   utilities reference the vars via the bg-(--ap-*) shorthand.
+──────────────────────────────────────────────────────────────────────────── */
+[data-admin] {
+  --ap-bg: #10151a;
+  --ap-surface: #151c23;
+  --ap-raised: #1b242e;
+  --ap-line: rgba(203, 221, 235, 0.1);
+  --ap-line-strong: rgba(203, 221, 235, 0.22);
+  --ap-text: #e7edf3;
+  --ap-muted: #8b9aa8;
+  --ap-accent: #82aaff; /* periwinkle — links, focus, unread; neither the site's
+                           mint nor its amber, and on purpose */
+  --ap-accent-soft: rgba(130, 170, 255, 0.16);
+  --ap-ok: #62d9a5; /* the ODPOWIEDZIANO stamp */
+  --ap-star: #e8b04a; /* the „wyróżnione" star — warm, distinct from accent/ok */
+  --ap-danger: #ff6b5e;
+  --ap-paper: #fbfaf7; /* the sheet */
+  --ap-paper-ink: #1c1c1c;
+  --ap-paper-line: #e4e1da;
+
+  background: var(--ap-bg);
+  color: var(--ap-text);
+}
+
+/* Visible keyboard focus everywhere in the panel. */
+[data-admin] :focus-visible {
+  outline: 2px solid var(--ap-accent);
+  outline-offset: 2px;
+}
+
+/* The sheet mirrors the inline styles lib/email-html.ts actually sends, so
+   what the composer shows is what the recipient's client renders. */
+[data-admin] .ap-sheet {
+  background: var(--ap-paper);
+  color: var(--ap-paper-ink);
+}
+[data-admin] .ap-sheet .tiptap {
+  min-height: 12rem;
+  outline: none;
+  caret-color: #1a73e8;
+}
+[data-admin] .ap-sheet p {
+  margin: 0 0 12px;
+}
+[data-admin] .ap-sheet h1 {
+  font-size: 24px;
+  line-height: 1.3;
+  margin: 24px 0 12px;
+  font-weight: 700;
+}
+[data-admin] .ap-sheet h2 {
+  font-size: 20px;
+  line-height: 1.3;
+  margin: 20px 0 10px;
+  font-weight: 700;
+}
+[data-admin] .ap-sheet h3 {
+  font-size: 17px;
+  line-height: 1.3;
+  margin: 18px 0 8px;
+  font-weight: 700;
+}
+[data-admin] .ap-sheet ul {
+  margin: 0 0 12px;
+  padding-left: 24px;
+  list-style: disc;
+}
+[data-admin] .ap-sheet ol {
+  margin: 0 0 12px;
+  padding-left: 24px;
+  list-style: decimal;
+}
+[data-admin] .ap-sheet li {
+  margin: 4px 0;
+}
+[data-admin] .ap-sheet blockquote {
+  margin: 0 0 12px;
+  padding: 2px 0 2px 14px;
+  border-left: 3px solid #d0d0d0;
+  color: #555555;
+}
+[data-admin] .ap-sheet hr {
+  border: none;
+  border-top: 1px solid #e0e0e0;
+  margin: 20px 0;
+}
+[data-admin] .ap-sheet a {
+  color: #1a73e8;
+  text-decoration: underline;
+}
+[data-admin] .ap-sheet pre {
+  background: #f5f5f5;
+  padding: 12px;
+  border-radius: 6px;
+  font-family: var(--font-geist-mono), ui-monospace, monospace;
+  font-size: 13px;
+  overflow: auto;
+  margin: 0 0 12px;
+}
+[data-admin] .ap-sheet code {
+  font-family: var(--font-geist-mono), ui-monospace, monospace;
+  font-size: 13px;
 }

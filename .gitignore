@@ -34,6 +34,9 @@ yarn-error.log*
 .env*
 !.env.example
 
+# admin panel inbox (SQLite lives on the server, never in git)
+/data/
+
 # vercel
 .vercel
 

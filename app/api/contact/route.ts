@@ -1,5 +1,3 @@
-import { createTransport, type Transporter } from "nodemailer";
-
 import {
   FUTURE_CLIENT_GROUP,
   LIMITS,
@@ -8,92 +6,46 @@ import {
   topicLabel,
   type ContactRequest,
 } from "@/lib/contact";
-import { CONTACT, SITE } from "@/lib/site";
+import { db } from "@/lib/db";
+import { messages } from "@/lib/db/schema";
+import { clientIpFrom, createRateLimiter } from "@/lib/rate-limit";
+import { SITE } from "@/lib/site";
+import { stripControl, stripControlKeepNewlines } from "@/lib/strings";
 
 /**
- * POST /api/contact — the delivery route behind the „Wiadomość" window.
+ * POST /api/contact — the intake route behind the „Wiadomość" window.
  *
- * Every enquiry becomes ONE e-mail INTO my own inbox (CONTACT_INBOX), sent FROM
- * my own authenticated address (SMTP_USER) — Proton refuses spoofed senders, and
- * the visitor's address belongs in Reply-To anyway, so answering an enquiry is
- * just pressing "Reply".
+ * Every enquiry becomes ONE ROW in the panel's inbox (data/admin.db) — no mail
+ * leaves the server here anymore; the admin reads and answers from /admin, and
+ * only the ANSWER travels over SMTP.
  *
  * The client already validates for UX; everything here re-validates for SAFETY,
  * because nothing obliges a request to have come from the form:
  *
  *   • deny-by-default input contract — unknown topics are rejected against the
  *     same TOPIC_GROUPS the menu renders from (lib/contact), lengths against the
- *     same LIMITS the inputs enforce, and every header-bound value has control
- *     characters stripped so nothing can smuggle a CRLF into Subject/Reply-To;
- *   • a per-IP sliding-window rate limit — this endpoint commands a real mailbox,
- *     and unmetered it would be a free spam cannon pointed at me;
+ *     same LIMITS the inputs enforce, and every single-line value has control
+ *     characters stripped so nothing line-oriented downstream (logs, mail
+ *     headers in a future reply) can be smuggled into;
+ *   • a per-IP sliding-window rate limit — unmetered, this endpoint would be a
+ *     free way to flood the panel's inbox;
  *   • a honeypot („website") answered with a FAKE success, because a bot told
- *     it was caught is a bot that comes back smarter;
+ *     it was caught is a bot that comes back smarter — trapped submissions are
+ *     never stored;
  *   • fail-closed errors — the visitor gets a bare status code, the detail goes
- *     to the server log under an error id. SMTP hostnames and stack traces are
- *     nobody's business.
- *
- * The e-mail itself is text/plain, on purpose: whatever a visitor types renders
- * as inert text in the mail client, never as markup.
+ *     to the server log under an error id.
  */
 
 /* ------------------------------- rate limit ------------------------------- */
 
-const WINDOW_MS = 10 * 60_000;
-const MAX_PER_WINDOW = 3;
+const rateLimit = createRateLimiter(10 * 60_000, 3);
 
-/**
- * Per-IP submit timestamps. In-memory is honest at this scale: one warm server
- * (or one serverless instance) remembers its own window, and losing the map on a
- * cold start merely lets someone send a fourth enquiry early. The map is bounded
- * so a botnet can't turn the limiter itself into the memory leak.
- */
-const hits = new Map<string, number[]>();
-
-/** Milliseconds until the caller may try again, or 0 when allowed. */
-function rateLimit(ip: string, now: number): number {
-  const windowStart = now - WINDOW_MS;
-
-  if (hits.size > 2_000) {
-    // Flood pressure: drop stale buckets first, and if the pressure is real
-    // traffic, reset outright — bounded memory beats perfect fairness here.
-    for (const [k, v] of hits) if (!v.some((t) => t > windowStart)) hits.delete(k);
-    if (hits.size > 2_000) hits.clear();
-  }
-
-  const recent = (hits.get(ip) ?? []).filter((t) => t > windowStart);
-  if (recent.length >= MAX_PER_WINDOW) {
-    hits.set(ip, recent);
-    return recent[0] + WINDOW_MS - now;
-  }
-  recent.push(now);
-  hits.set(ip, recent);
-  return 0;
-}
-
-/**
- * First X-Forwarded-For hop. Behind a real proxy (Vercel, nginx) that's the
- * client; exposed directly to the internet the header is client-supplied fiction
- * — an accepted trade-off for a limiter that only guards a contact form.
- */
-const clientIp = (req: Request) =>
-  req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
+const clientIp = (req: Request) => clientIpFrom(req.headers);
 
 /* ------------------------------- validation ------------------------------- */
 
 /** Mirrors the form's check: the only real test of an address is a reply. */
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-/** Single-line fields: no C0/DEL control characters, ever — CRLF included. */
-const stripControl = (s: string) =>
-  s.replace(/[\u0000-\u001f\u007f]/g, " ").trim();
-
-/** The message keeps its line breaks (and tabs); every other control char goes. */
-const stripControlKeepNewlines = (s: string) =>
-  s
-    .replace(/\r\n?/g, "\n")
-    .replace(/[\u0000-\u0008\u000b-\u001f\u007f]/g, " ")
-    .trim();
 
 type Enquiry = {
   firstName: string;
@@ -103,7 +55,7 @@ type Enquiry = {
   subject: string;
   budget: string | null;
   message: string;
-  /** An arrived-filled honeypot — still a "valid" parse, but it must not send. */
+  /** An arrived-filled honeypot — still a "valid" parse, but it must not land. */
   trapped: boolean;
 };
 
@@ -166,59 +118,6 @@ function parseEnquiry(body: unknown): Enquiry | null {
   };
 }
 
-/* --------------------------------- mailer --------------------------------- */
-
-type Smtp = {
-  host: string;
-  port: number;
-  user: string;
-  pass: string;
-  inbox: string;
-};
-
-/** Fail-closed config read: absent or malformed env means NO transport at all. */
-function smtpConfig(): Smtp | null {
-  const { SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, CONTACT_INBOX } =
-    process.env;
-  const port = Number(SMTP_PORT);
-  if (!SMTP_HOST || !SMTP_USER || !SMTP_PASS) return null;
-  if (!Number.isInteger(port) || port < 1 || port > 65535) return null;
-  return {
-    host: SMTP_HOST,
-    port,
-    user: SMTP_USER,
-    pass: SMTP_PASS,
-    // Enquiries land in my own mailbox; by default the same address they're
-    // sent from, which is also the one the „Kontakt" tiles advertise.
-    inbox: CONTACT_INBOX || CONTACT.email,
-  };
-}
-
-let transporter: Transporter | null = null;
-
-function getTransporter(cfg: Smtp): Transporter {
-  transporter ??= createTransport({
-    host: cfg.host,
-    port: cfg.port,
-    // 465 is implicit TLS; 587 (Proton) is STARTTLS — and requireTLS makes the
-    // upgrade mandatory, so credentials never cross the wire in plaintext even
-    // if a middlebox strips the server's STARTTLS advertisement.
-    secure: cfg.port === 465,
-    requireTLS: true,
-    auth: { user: cfg.user, pass: cfg.pass },
-    tls: { minVersion: "TLSv1.2" },
-    // A stuck SMTP conversation must not hold the request open forever.
-    connectionTimeout: 10_000,
-    greetingTimeout: 10_000,
-    socketTimeout: 20_000,
-    // This route sends exactly one shape of message. Nothing in a request may
-    // ever grow into "attach this file / fetch this URL".
-    disableFileAccess: true,
-    disableUrlAccess: true,
-  });
-  return transporter;
-}
-
 /* --------------------------------- handler -------------------------------- */
 
 const json = (ok: boolean, status: number, headers?: HeadersInit) =>
@@ -240,7 +139,7 @@ export async function POST(request: Request) {
     if (originHost !== host && origin !== SITE) return json(false, 403);
   }
 
-  const retryMs = rateLimit(clientIp(request), Date.now());
+  const retryMs = rateLimit(clientIp(request));
   if (retryMs > 0) {
     return json(false, 429, {
       "Retry-After": String(Math.ceil(retryMs / 1000)),
@@ -251,7 +150,17 @@ export async function POST(request: Request) {
     return json(false, 415);
   }
 
-  // Read as text first so an oversized body is bounced by LENGTH, not parsed.
+  // Reject on DECLARED size before buffering anything: route handlers have no
+  // built-in body cap, so a huge (or header-less chunked) body would otherwise
+  // be read fully into memory before the length check below could fire. The
+  // form always sends a small, Content-Length'd JSON body, so a missing or
+  // absurd length is not a visitor to accommodate.
+  const declared = Number(request.headers.get("content-length"));
+  if (!Number.isFinite(declared) || declared <= 0 || declared > 50_000) {
+    return json(false, 413);
+  }
+
+  // Belt-and-braces: the actual body must also fit (a lying Content-Length).
   const raw = await request.text();
   if (raw.length > 50_000) return json(false, 413);
   let body: unknown;
@@ -270,53 +179,27 @@ export async function POST(request: Request) {
     return json(true, 200);
   }
 
-  const cfg = smtpConfig();
-  if (!cfg) {
-    console.error(
-      "[contact] SMTP env missing/invalid — set SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS (see .env.example)",
-    );
-    return json(false, 500);
-  }
-
   const { firstName, lastName, email, subject, budget, message } = enquiry;
-  const fullName = `${firstName} ${lastName}`;
 
   try {
-    const info = await getTransporter(cfg).sendMail({
-      // From MUST be the authenticated Proton address or the relay refuses it;
-      // the visitor lives in Reply-To, so "Odpowiedz" goes straight to them.
-      //
-      // The display name is SHORT and pure ASCII word-characters on purpose, and
-      // that is load-bearing. Proton's submission check compares MAIL FROM to the
-      // From header WITHOUT unfolding it. Any accent or dash makes nodemailer
-      // MIME-encode the name, and a longer name overruns ~76 chars — either way
-      // `<address>` folds onto a continuation line, Proton reads the phrase left
-      // on line one as the address, and every send dies with
-      // `550 5.7.26 … does not match header From`. Keep it bare, keep it short.
-      from: { name: "Formularz kontaktowy", address: cfg.user },
-      to: cfg.inbox,
-      replyTo: { name: fullName, address: email },
-      subject: `Formularz: ${subject} — ${fullName}`.slice(0, 180),
-      text: [
-        `Nowa wiadomość z formularza na ${SITE}`,
-        "",
-        `Od:       ${fullName} <${email}>`,
-        `Temat:    ${subject}`,
-        ...(budget ? [`Budżet:   ${budget}`] : []),
-        `Adres IP: ${clientIp(request)}`,
-        "",
-        "—".repeat(30),
-        "",
-        message,
-      ].join("\n"),
-    });
-    console.log(`[contact] sent ${info.messageId}`);
+    db.insert(messages)
+      .values({
+        firstName,
+        lastName,
+        email,
+        subject,
+        budget,
+        body: message,
+        ip: clientIp(request),
+        createdAt: Date.now(),
+      })
+      .run();
     return json(true, 200);
   } catch (err) {
     // Fail closed and anonymously: the id ties the visitor-facing failure to
-    // the full server-side error without exposing SMTP internals to anyone.
+    // the full server-side error without exposing storage internals to anyone.
     const errorId = crypto.randomUUID();
-    console.error(`[contact:${errorId}] send failed`, err);
+    console.error(`[contact:${errorId}] store failed`, err);
     return json(false, 500);
   }
 }
