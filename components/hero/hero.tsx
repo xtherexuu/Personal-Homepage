@@ -688,7 +688,7 @@ export function Hero({ children }: { children?: ReactNode }) {
           soft floor for the lower elements. */}
       <div
         aria-hidden
-        className="pointer-events-none absolute inset-0 z-[1]"
+        className="pointer-events-none absolute inset-0 z-1"
         style={{
           background:
             "linear-gradient(96deg, rgba(11,26,28,0.75) 0%, rgba(11,26,28,0.6) 20%, rgba(11,26,28,0.2) 35%, rgba(11,26,28,0) 50%), linear-gradient(-96deg, rgba(11,26,28,0.75) 0%, rgba(11,26,28,0.6) 10%, rgba(11,26,28,0.2) 25%, rgba(11,26,28,0) 50%), linear-gradient(0deg, rgba(11,26,28,0.55) 0%, rgba(11,26,28,0) 20%)",
